@@ -1,5 +1,7 @@
 """Quick connectivity test — does not place any orders."""
-import alpaca_client as broker
+from core.broker import AlpacaBroker
+
+broker = AlpacaBroker()
 
 acct = broker.get_account()
 print(f"Account: equity={acct.equity} cash={acct.cash} status={acct.status}")

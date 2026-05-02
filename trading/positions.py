@@ -400,7 +400,8 @@ class PositionsMixin:
                 continue
             order = self.broker.place_market_order(sym, qty, "SELL")
             if order:
-                self._daily_pnl += pnl
+                with self._state_lock:
+                    self._daily_pnl += pnl
                 self.database.record_decision(sym, "SELL", pos_data.get("current_price"), qty,
                                 pnl=pnl, setup_type=pos_data.get("setup_type"),
                                 reasoning=f"Time stop: position aged > {config.TIME_STOP_MINUTES}min without reaching {config.TIME_STOP_PROGRESS_PCT:.0%} of target")
@@ -430,7 +431,8 @@ class PositionsMixin:
                 continue
             order = self.broker.place_market_order(sym, half_qty, "SELL")
             if order:
-                self._daily_pnl += pnl
+                with self._state_lock:
+                    self._daily_pnl += pnl
                 self.database.record_decision(sym, "PARTIAL_SELL", pos_data.get("current_price"),
                                 half_qty, pnl=pnl,
                                 reasoning=f"Auto partial profit: reached {config.PARTIAL_PROFIT_TRIGGER_PCT:.0%} of take-profit range — scaling out 50%")

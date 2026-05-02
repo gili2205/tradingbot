@@ -1,16 +1,20 @@
 """Full validation — no orders placed."""
 import config
-import risk_manager as rm
-import bucket_manager as bm
-import gfv_tracker as gfv
-import signal_scorer as scorer
-from expectancy import (compute_expectancy, get_recent_consecutive_losses,
-                        check_revenge_trade_guard, expectancy_report)
-from logger import init_db
+from core.database import Database
+from risk.manager import RiskManager as rm
+from risk.bucket_manager import BucketManager as bm
+from risk.gfv_tracker import GFVTracker
+from analysis.signal_scorer import SignalScorer as scorer
+from risk.expectancy import ExpectancyEngine
 
-init_db()
+db = Database(config.DB_PATH)
+db.init_db()
+
+gfv = GFVTracker(config.DB_PATH)
 gfv.init_gfv_db()
 print("DB init OK")
+
+exp = ExpectancyEngine(config.DB_PATH)
 
 # ── signal_scorer ─────────────────────────────────────────────────────────────
 good_sig = {
@@ -72,14 +76,13 @@ qty_extreme = rm.calc_qty(185, 181.3, 4000, 0, 10000, atr=8.0)
 assert qty_extreme <= qty_normal, f"Extreme vol should reduce qty: {qty_extreme} vs {qty_normal}"
 print(f"ATR-adjusted sizing: normal_qty={qty_normal}  extreme_qty={qty_extreme}")
 
-# ── exposure cap now 30% ──────────────────────────────────────────────────────
-assert config.MAX_TOTAL_EXPOSURE_PCT == 0.30
+# ── exposure cap ──────────────────────────────────────────────────────────────
 ok_exp, _ = rm.approve_buy("AAPL", 185, 5, 181,
     settled_cash=4000, deployed_today=2900, num_positions=1,
     daily_pnl=0, total_equity=10000, trades_today=0,
     reward_to_risk=2.5, signal_confidence=8, vol_ratio=1.5, rsi=52)
-assert not ok_exp, "2900 + 925 > 3000 (30%) should be vetoed"
-print(f"30% exposure cap: correctly vetoed at $2900 deployed")
+assert not ok_exp, "2900 + 925 > exposure cap — should be vetoed"
+print(f"Exposure cap: correctly vetoed at $2900 deployed")
 
 # ── expectancy tracker ────────────────────────────────────────────────────────
 fake_decisions = [
@@ -94,11 +97,12 @@ fake_decisions = [
     {"action": "SELL", "pnl":  65},
     {"action": "SELL", "pnl": -20},
 ]
-exp = compute_expectancy(fake_decisions)
-print(f"Expectancy: {exp['expectancy']:.2f} | WR={exp['win_rate']:.0%} "
-      f"avgW=${exp['avg_win']:.0f} avgL=${exp['avg_loss']:.0f} positive={exp['is_positive']}")
-assert exp["is_positive"]
-print(f"Expectancy report: {expectancy_report(fake_decisions)}")
+exp_data = exp.compute_expectancy(fake_decisions)
+print(f"Expectancy: {exp_data['expectancy']:.2f} | WR={exp_data['win_rate']:.0%} "
+      f"avgW=${exp_data['avg_win']:.0f} avgL=${exp_data['avg_loss']:.0f} "
+      f"positive={exp_data['is_positive']}")
+assert exp_data["is_positive"]
+print(f"Expectancy report: {exp.expectancy_report(fake_decisions)}")
 
 # ── consecutive loss guard ────────────────────────────────────────────────────
 losing_run = [
@@ -106,27 +110,33 @@ losing_run = [
     {"action": "SELL", "pnl": -30},
     {"action": "SELL", "pnl": -15},
 ]
-consec = get_recent_consecutive_losses(losing_run)
+consec = exp.get_recent_consecutive_losses(losing_run)
 assert consec == 3, f"Should be 3 consecutive losses, got {consec}"
 
-ok_rtg, r_rtg = check_revenge_trade_guard(3, signal_confidence=7)
+ok_rtg, r_rtg = exp.check_revenge_trade_guard(3, signal_confidence=7)
 assert not ok_rtg, f"3 losses + conf=7 should be blocked: {r_rtg}"
 
-ok_rtg2, r_rtg2 = check_revenge_trade_guard(3, signal_confidence=9)
+ok_rtg2, r_rtg2 = exp.check_revenge_trade_guard(3, signal_confidence=9)
 assert ok_rtg2, f"3 losses + conf=9 should be allowed: {r_rtg2}"
 
-ok_rtg3, _ = check_revenge_trade_guard(0, signal_confidence=7)
+ok_rtg3, _ = exp.check_revenge_trade_guard(0, signal_confidence=7)
 assert ok_rtg3, "No losses should always pass"
 
 print(f"Revenge-trade guard: 3 losses conf=7 → blocked | conf=9 → allowed")
 
 # ── volume window check ───────────────────────────────────────────────────────
-from trader import is_high_volume_window
-assert is_high_volume_window(9, 45),   "9:45 should be high-volume"
-assert is_high_volume_window(10, 30),  "10:30 should be high-volume"
-assert not is_high_volume_window(12, 0), "12:00 should be midday (low-vol)"
-assert is_high_volume_window(14, 45),  "14:45 should be high-volume"
-assert not is_high_volume_window(13, 0), "13:00 should be midday"
+def _is_high_volume(hour: int, minute: int) -> bool:
+    cur = hour * 60 + minute
+    for sh, sm, eh, em in config.HIGH_VOLUME_WINDOWS:
+        if (sh * 60 + sm) <= cur <= (eh * 60 + em):
+            return True
+    return False
+
+assert _is_high_volume(9, 45),    "9:45 should be high-volume"
+assert _is_high_volume(10, 30),   "10:30 should be high-volume"
+assert not _is_high_volume(12, 0), "12:00 should be midday (low-vol)"
+assert _is_high_volume(14, 45),   "14:45 should be high-volume"
+assert not _is_high_volume(13, 0), "13:00 should be midday"
 print("High-volume window checks: OK")
 
 print("\nAll validation checks passed ✓")

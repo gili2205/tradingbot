@@ -62,15 +62,33 @@ import config
 import logging
 logging.disable(logging.CRITICAL)   # silence module loggers during tests
 
-modules_to_import = [
-    "config", "logger", "alpaca_client", "indicators", "risk_manager",
-    "signal_scorer", "expectancy", "bucket_manager", "gfv_tracker",
-    "market_guard", "screener", "dark_pool", "options_flow", "insider_flow",
-    "pre_market", "yield_curve", "short_interest", "edgar",
-    "session_overrides", "notifier", "ai_agent", "market_analyst", "trader",
+new_modules = [
+    "config",
+    "core.database",
+    "core.broker",
+    "analysis.indicators",
+    "risk.manager",
+    "analysis.signal_scorer",
+    "risk.expectancy",
+    "risk.bucket_manager",
+    "risk.gfv_tracker",
+    "analysis.market_guard",
+    "analysis.screener",
+    "data.dark_pool",
+    "data.options_flow",
+    "data.insider_flow",
+    "data.pre_market",
+    "data.yield_curve",
+    "data.short_interest",
+    "data.edgar",
+    "trading.session_overrides",
+    "trading.notifier",
+    "agents.agent",
+    "agents.analyst",
+    "trading.orchestrator",
 ]
-for mod in modules_to_import:
-    check(f"import {mod}", lambda m=mod: __import__(m) is not None)
+for mod in new_modules:
+    check(f"import {mod}", lambda m=mod: __import__(m, fromlist=["."]) is not None)
 
 logging.disable(logging.NOTSET)
 
@@ -79,6 +97,7 @@ logging.disable(logging.NOTSET)
 # ─────────────────────────────────────────────────────────────
 section("2. EXTERNAL API ENDPOINTS")
 import requests
+from data.dark_pool import DarkPoolClient
 
 def ping(label, url, method="get", headers=None, params=None, expected_status=200, json_key=None):
     try:
@@ -120,7 +139,7 @@ for label, url, hdrs, params, jkey in endpoints:
 
 # FINRA CNMS dark pool file
 check("FINRA CNMS dark pool (latest file)",
-      lambda: __import__("dark_pool").load_dark_pool_data() != {})
+      lambda: DarkPoolClient().load_dark_pool_data() != {})
 
 # SEC EDGAR full-text search
 ok, msg = ping("SEC EDGAR 8-K search",
@@ -145,7 +164,7 @@ check("yfinance HYG 2d bars",
 # Anthropic API
 import anthropic
 check("Anthropic API — ping (tiny completion)",
-      lambda: __import__("anthropic").Anthropic(
+      lambda: anthropic.Anthropic(
           api_key=config.ANTHROPIC_API_KEY).messages.create(
           model=config.CLAUDE_MODEL,
           max_tokens=10,
@@ -156,7 +175,7 @@ check("Anthropic API — ping (tiny completion)",
 # 3. RISK MANAGER
 # ─────────────────────────────────────────────────────────────
 section("3. RISK MANAGER — VETO RULES")
-import risk_manager as rm
+from risk.manager import RiskManager as rm
 
 def rm_check(name, expected_ok, **kwargs):
     defaults = dict(
@@ -175,7 +194,7 @@ def rm_check(name, expected_ok, **kwargs):
 
 rm_check("baseline approval",                True)
 rm_check("daily drawdown hit",               False, daily_pnl=-210.0)
-rm_check("exposure cap (40%)",               False, deployed_today=4100.0)
+rm_check("exposure cap",                     False, deployed_today=4100.0)
 rm_check("settled cash too low",             False, settled_cash=50.0)
 rm_check("too many positions (>4)",          False, num_positions=4)
 rm_check("R:R below 2.0",                   False, reward_to_risk=1.5)
@@ -216,10 +235,9 @@ check("rm.compute_stop_take_profit RR>=2.0", test_sl_tp)
 # 4. SIGNAL SCORER
 # ─────────────────────────────────────────────────────────────
 section("4. SIGNAL SCORER")
-import signal_scorer as scorer
+from analysis.signal_scorer import SignalScorer as scorer
 
 def test_score_floor():
-    # MIN_SIGNAL_SCORE_TO_AI should now be 6.0
     assert config.MIN_SIGNAL_SCORE_TO_AI == 6.0, \
         f"Expected 6.0, got {config.MIN_SIGNAL_SCORE_TO_AI}"
     return f"MIN_SIGNAL_SCORE_TO_AI={config.MIN_SIGNAL_SCORE_TO_AI}"
@@ -254,7 +272,7 @@ def test_gap_and_go_catalyst_after_11():
     from unittest.mock import patch
     et = pytz.timezone("America/New_York")
     mock_time = datetime(2026, 5, 1, 13, 0, tzinfo=et)   # 1 PM ET
-    with patch("signal_scorer.datetime") as mock_dt:
+    with patch("analysis.signal_rules.datetime") as mock_dt:
         mock_dt.now.return_value = mock_time
         sig = {
             "gap_pct": 3.0, "today_open": 100.0, "first_bar_high": 103.0,
@@ -272,7 +290,7 @@ def test_gap_and_go_blocked_after_11():
     from unittest.mock import patch
     et = pytz.timezone("America/New_York")
     mock_time = datetime(2026, 5, 1, 13, 0, tzinfo=et)   # 1 PM ET
-    with patch("signal_scorer.datetime") as mock_dt:
+    with patch("analysis.signal_rules.datetime") as mock_dt:
         mock_dt.now.return_value = mock_time
         sig = {"gap_pct": 2.5, "today_open": 100.0, "price": 102.5, "vol_ratio": 1.2,
                "rsi": 60.0, "above_vwap": True, "orb_30_high": 0, "orb_30_low": 0,
@@ -286,7 +304,7 @@ check("gap-and-go still blocked after 11AM with vol_ratio<3.0", test_gap_and_go_
 # 5. INDICATORS — LIQUIDITY SWEEP + FVG
 # ─────────────────────────────────────────────────────────────
 section("5. INDICATORS — LIQUIDITY SWEEP & FVG")
-import indicators as ind
+from analysis.indicators import IndicatorEngine as ind
 import pandas as pd
 import numpy as np
 
@@ -305,10 +323,9 @@ def make_df(n=50, base_price=100.0, trend=0.0):
 def test_sweep_detected():
     df = make_df(30)
     support_level = float(df["low"].mean()) - 0.5
-    # Manufacture a sweep: last bar pierces below support then closes above
     df.iloc[-1, df.columns.get_loc("low")]   = support_level - 0.3
     df.iloc[-1, df.columns.get_loc("close")] = support_level + 0.5
-    df.iloc[-1, df.columns.get_loc("volume")] = 300000.0  # spike volume
+    df.iloc[-1, df.columns.get_loc("volume")] = 300000.0
     result = ind.detect_liquidity_sweep(df, key_levels={"nearest_support": support_level})
     detected = result.get("liquidity_sweep_detected", False)
     assert detected, f"Sweep should be detected: {result}"
@@ -325,11 +342,10 @@ check("detect_liquidity_sweep — no false positive on clean data", test_sweep_n
 
 def test_fvg_detected():
     df = make_df(20)
-    # Manufacture a bullish FVG: candle[17].high < candle[19].low
     df.iloc[17, df.columns.get_loc("high")] = 98.0
     df.iloc[18, df.columns.get_loc("high")] = 99.0
     df.iloc[18, df.columns.get_loc("low")]  = 98.5
-    df.iloc[19, df.columns.get_loc("low")]  = 99.5   # gap: 98.0–99.5
+    df.iloc[19, df.columns.get_loc("low")]  = 99.5
     df.iloc[19, df.columns.get_loc("close")] = 102.0
     result = ind.detect_fvg(df)
     return f"fvg keys={list(result.keys())}"
@@ -357,7 +373,8 @@ check("get_signal_summary returns valid dict", test_get_key_levels)
 # 6. EXPECTANCY — KELLY + 90-MIN WINDOW
 # ─────────────────────────────────────────────────────────────
 section("6. EXPECTANCY & REVENGE TRADE GUARD")
-import expectancy as exp
+from risk.expectancy import ExpectancyEngine
+exp = ExpectancyEngine(":memory:")
 
 def test_kelly_no_data():
     factor = exp.compute_kelly_factor([])
@@ -417,7 +434,7 @@ check("revenge guard allows high-confidence trade after 3 losses", test_revenge_
 # 7. BUCKET MANAGER
 # ─────────────────────────────────────────────────────────────
 section("7. BUCKET MANAGER")
-import bucket_manager as bm
+from risk.bucket_manager import BucketManager as bm
 
 def test_empty_bucket_allowed():
     ok, reason = bm.bucket_is_open("AAPL", [])
@@ -442,8 +459,8 @@ check("bucket_is_open — high-conviction (9/10) overrides", test_high_convictio
 def test_sector_strength():
     snaps = {
         "SPY": {"change_pct": 0.5},
-        "XLK": {"change_pct": 1.5},   # tech leading
-        "XLF": {"change_pct": 0.2},   # finance lagging
+        "XLK": {"change_pct": 1.5},
+        "XLF": {"change_pct": 0.2},
     }
     strength = bm.get_sector_strength(snaps)
     assert strength["tech"] > 0, f"Tech should be leading: {strength}"
@@ -455,7 +472,7 @@ check("get_sector_strength — relative vs SPY correct", test_sector_strength)
 # 8. DARK POOL
 # ─────────────────────────────────────────────────────────────
 section("8. DARK POOL (FINRA CNMS)")
-import dark_pool as dp
+dp = DarkPoolClient()
 
 def test_dark_pool_loads():
     data = dp.load_dark_pool_data()
@@ -483,7 +500,8 @@ check("dark pool — get_dark_pool_signals for AAPL/NVDA/SPY", test_dark_pool_kn
 # 9. PRE-MARKET
 # ─────────────────────────────────────────────────────────────
 section("9. PRE-MARKET LEVELS")
-import pre_market as pm_mod
+from data.pre_market import PreMarketAnalyzer
+pm_mod = PreMarketAnalyzer()
 
 def test_premarket_fetch():
     data = pm_mod.get_premarket_data(["AAPL", "NVDA", "TSLA"])
@@ -509,7 +527,8 @@ check("pre_market — get_premarket_key_levels AAPL", test_premarket_key_levels)
 # 10. YIELD CURVE
 # ─────────────────────────────────────────────────────────────
 section("10. YIELD CURVE + CREDIT SPREADS")
-import yield_curve as yc_mod
+from data.yield_curve import YieldCurveClient
+yc_mod = YieldCurveClient()
 
 def test_yield_curve_fetch():
     data = yc_mod.get_yield_curve()
@@ -535,7 +554,8 @@ check("yield_curve — cache returns same result", test_yield_curve_cached)
 # 11. SHORT INTEREST
 # ─────────────────────────────────────────────────────────────
 section("11. SHORT INTEREST")
-import short_interest as si_mod
+from data.short_interest import ShortInterestClient
+si_mod = ShortInterestClient()
 
 def test_short_interest_fetch():
     data = si_mod.get_short_interest(["AAPL", "TSLA", "NVDA"])
@@ -551,26 +571,25 @@ check("short_interest — fetches data for AAPL/TSLA/NVDA", test_short_interest_
 # 12. EDGAR 8-K GATE
 # ─────────────────────────────────────────────────────────────
 section("12. SEC EDGAR 8-K GATE")
-import edgar
+from data.edgar import EdgarClient
+edgar_client = EdgarClient()
 
 def test_edgar_no_veto_normal():
-    veto, reason = edgar.check_fresh_8k("SPY")
-    # SPY (S&P ETF) almost never files 8-Ks
+    veto, reason = edgar_client.check_fresh_8k("SPY")
     return f"veto={veto} reason={reason}"
 check("edgar — SPY: no 8-K veto expected", test_edgar_no_veto_normal)
 
 def test_edgar_cache():
-    edgar.check_fresh_8k("AAPL")   # prime cache
-    veto, reason = edgar.check_fresh_8k("AAPL")  # should hit cache
+    edgar_client.check_fresh_8k("AAPL")   # prime cache
+    veto, reason = edgar_client.check_fresh_8k("AAPL")  # should hit cache
     return f"veto={veto} (cache hit)"
 check("edgar — cache works (second call hits cache)", test_edgar_cache)
 
 def test_edgar_fail_open():
-    # Test with a bad URL substitution — should fail open (veto=False)
-    orig = edgar._BASE
-    edgar._BASE = "https://invalid.notareal.domain.xyz/search"
-    veto, reason = edgar.check_fresh_8k("FAILTEST")
-    edgar._BASE = orig
+    orig = EdgarClient._BASE
+    edgar_client._BASE = "https://invalid.notareal.domain.xyz/search"
+    veto, reason = edgar_client.check_fresh_8k("FAILTEST")
+    edgar_client._BASE = orig
     assert not veto, f"Should fail open (veto=False), got veto={veto}"
     return f"failed open: {reason}"
 check("edgar — network error fails open (no veto)", test_edgar_fail_open)
@@ -579,10 +598,13 @@ check("edgar — network error fails open (no veto)", test_edgar_fail_open)
 # 13. SCREENER
 # ─────────────────────────────────────────────────────────────
 section("13. SCREENER")
-import screener
+from analysis.screener import Screener
+from core.broker import AlpacaBroker
+_broker = AlpacaBroker()
+screener_obj = Screener(_broker)
 
 def test_most_actives():
-    syms = screener._fetch_most_actives(top=10)
+    syms = screener_obj._fetch_most_actives(top=10)
     assert isinstance(syms, list), "Should return list"
     assert len(syms) >= 5, f"Expected >=5 symbols, got {len(syms)}"
     assert all(s.isalpha() and len(s) <= 5 for s in syms), "Bad symbol format"
@@ -590,13 +612,13 @@ def test_most_actives():
 check("screener — most-actives returns valid symbols", test_most_actives)
 
 def test_gainers():
-    syms = screener._fetch_gainers(top=10)
+    syms = screener_obj._fetch_gainers(top=10)
     assert isinstance(syms, list)
     return f"{len(syms)} gainers fetched"
 check("screener — gainers fetches OK", test_gainers)
 
 def test_universe_build():
-    universe = screener.build_universe()
+    universe = screener_obj.build_universe()
     assert isinstance(universe, list)
     assert len(universe) >= len(config.WATCHLIST), \
         f"Universe ({len(universe)}) should be >= watchlist ({len(config.WATCHLIST)})"
@@ -608,7 +630,7 @@ check("screener — build_universe returns full universe", test_universe_build)
 # 14. ALPACA BROKER
 # ─────────────────────────────────────────────────────────────
 section("14. ALPACA BROKER")
-import alpaca_client as broker
+broker = _broker   # reuse instance from screener section
 
 def test_alpaca_account():
     acct = broker.get_account()
@@ -625,7 +647,6 @@ def test_alpaca_positions():
 check("alpaca — get_positions returns dict", test_alpaca_positions)
 
 def test_alpaca_quote():
-    # Returns None outside market hours (stale bid/ask = 0). Confirmed correct behavior.
     quote = broker.get_latest_quote("AAPL")
     if quote is None:
         return "None returned (market closed — correct; bid/ask are 0 when not trading)"
@@ -680,7 +701,9 @@ check("alpaca — get_all_tradeable_symbols >1000", test_alpaca_tradeable_symbol
 # 15. SESSION OVERRIDES
 # ─────────────────────────────────────────────────────────────
 section("15. SESSION OVERRIDES")
-import session_overrides as so
+from trading.session_overrides import SessionOverrides
+import config as _config_module
+so = SessionOverrides(_config_module)
 
 def test_session_overrides_defaults():
     so.reset()

@@ -35,7 +35,7 @@ Items that scored below threshold were already filtered out before you see them.
 4.  Always specify a hard stop-loss at the moment of entry. Never enter without one.
 5.  Never move a stop-loss farther away to avoid taking a loss. Stops only move in the direction of profit.
 6.  Stop trading for the day if daily drawdown reaches 2% of equity ($200 on $10K). Return final_decision=SKIP for all subsequent symbols.
-7.  Limit total open exposure to 20%–30% of account equity ($2,000–$3,000). Never exceed 30%.
+7.  Limit total open exposure to 40% of account equity ($4,000 on $10K). Never exceed 40%.
 8.  Enter only when trend, volume, volatility, and price-action confirmation all align simultaneously.
 9.  Avoid trading during unclear or choppy market conditions (narrow range, MACD flat). vol_ratio threshold is time-sensitive — see early_window_note in account state.
 10. Use volatility-adjusted position sizing: larger ATR → smaller position size.
@@ -150,7 +150,7 @@ HARD CONSTRAINTS (override everything)
 - risk_per_trade_dollars > $100 → final_decision must be SKIP
 - daily_pnl_effective (realized + unrealized) <= drawdown_limit → SKIP ALL new BUYs
 - circuit_breaker != "OK" in account state → SKIP ALL new BUYs (market stress)
-- total_exposure >= 30% of equity → final_decision must be SKIP for any new BUY
+- total_exposure >= 40% of equity → final_decision must be SKIP for any new BUY
 - vol_ratio below active floor → final_decision must be SKIP
   (floor = 0.5 for gap ≥ 2% + above VWAP in 9:35–10:30 ET; 0.6 for all stocks in 9:35–10:30 ET; 0.7 otherwise)
   (check early_window_note in account state — if early_window is true, do NOT hard-SKIP on vol_ratio < 1.0)
