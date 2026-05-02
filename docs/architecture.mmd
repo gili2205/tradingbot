@@ -1,117 +1,44 @@
 flowchart TD
 
-  SCHED["⏰ SCHEDULER\nMarket clock in ET · drives all three jobs below"]
+  SCHED["⏰ Scheduler\nMarket clock in ET"]
 
-  %% ── MORNING STUDY ──────────────────────────────────────────────────────────
-  subgraph MORNING_SG["📋 Morning Study  —  8:30–9:35 AM ET  (runs inside the 2-min job)"]
-    STUDY["Pulls macro calendar · yield curve · pre-market levels\nshort interest · overnight news · recent trade history\nAlso pre-warms screener, dark pool, and pre-market caches"]
-    ANALYST["Claude LLM reads all of it and produces a daily plan:\nmarket bias · session posture · candidate watchlist\nsession overrides (e.g. avoid tech today)"]
-    STUDY --> ANALYST
+  MORNING["📋 Morning Study  8:30–9:35 AM\nMacro · pre-market · news → Claude → daily plan + posture"]
+
+  subgraph CYCLE["🔄 Trade Cycle  every 10 min"]
+    GUARD["🛡️ Market Context\nVIX · regime · circuit breaker · posture"]
+    SCREEN["🔍 Screener\n~150 symbols ranked by volume × move × rank"]
+    SCAN["📊 Scanner\nBars + 40 indicators → signal score"]
+    ENRICH["📦 Enrichment\nOptions · dark pool · insider · news  (parallel · 20 s cap)"]
+    PREFILTER["🔎 Pre-Filter\nBucket · earnings blackout · cooling · cap 20"]
+    AI["🤖 Claude LLM\nBUY / SKIP · entry · stop · target · confidence"]
+    RISK["⚖️ Risk Gates + Sizing\nExposure · drawdown · spread · ATR · VIX · Kelly"]
+    ORDER["✅ Order Placed\nBracket: entry · stop-loss · take-profit"]
+    GUARD --> SCREEN --> SCAN --> ENRICH --> PREFILTER --> AI --> RISK --> ORDER
   end
 
-  %% ── TRADE CYCLE ────────────────────────────────────────────────────────────
-  subgraph CYCLE_SG["🔄 Trade Cycle  —  every 10 min  (throttled to 20 min from 11:30–2:00 PM ET)"]
-
-    UNIVERSE["📡 STEP 1 — Universe Formed\nAll NYSE/NASDAQ snapshots pulled every cycle\nMost-actives · top gainers · watchlist candidates merged in\nUp to ~150 symbols enter the pipeline"]
-
-    GUARD["🛡️ STEP 2 — Market Context  evaluated first, before any stock is touched\nVIX size factor · yield curve factor · intraday regime\nCircuit breaker · Dynamic confidence bar · Cooling symbols list\nMorning posture from the analyst (normal · conservative · stand_aside)"]
-
-    GUARDED{"Safe to run\nthe cycle?"}
-    BLOCKED["🚫 Cycle aborted\nStand-aside or circuit breaker active\nNo new positions this tick"]
-
-    SCREEN["🔍 STEP 3 — Screener Ranks the Universe\nEach symbol scored: dollar volume × price move × cross-sectional rank\nStrongest ~150 names survive · the rest are dropped here"]
-
-    SCAN["📊 STEP 4 — Technical Deep-Dive per Symbol\n5-min · 15-min · daily bars · 40 indicators computed:\nEMA · MACD · RSI · ATR · VWAP · VWAP deviation\nRS vs SPY · Fair Value Gaps · key price levels\nSector ETF trend · HTF bias\nSignal score assigned · dropped early if ATR too high · price too low · dead volume"]
-
-    SCOREGATE{"Signal score\n≥ 6.0?"}
-    DROPSCORE["❌ Dropped\nWeak signal — no statistical edge"]
-
-    ENRICH["📦 STEP 5 — Enriched with Real-Money Context\nAll 6 sources run in parallel with a 20-second hard cap:\nOptions flow — unusual activity signalling smart money?\nDark pool — large institutional prints present?\nInsider buys — executives buying their own stock?\nShort interest — short squeeze potential?\nPre-market levels — how did it behave before the open?\nNews — any catalysts, filings, or red flags?"]
-
-    PREFILTER["🔎 STEP 6 — Mechanical Pre-Filter  (deterministic — no AI involved)\nSector bucket already has an open position → blocked\nEarnings announcement within blackout window → blocked\nSymbol on cooling-off list (persistent losing streak) → blocked\nSurvivors are capped at 20 before Claude is called"]
-
-    MECHGATE{"Any hard rule\ntriggered?"}
-    DROP_MECH["❌ Vetoed\nBlocked by a rule — AI never called\nSaves cost and prevents known-bad setups"]
-
-    AI["🤖 STEP 7 — Claude LLM Makes the Call\nSees the full picture: technical scores · enrichment · account state · daily plan\nDecision: BUY · SKIP\nIf BUY: proposes entry · stop-loss · take-profit · confidence 1–10 · R:R ratio"]
-
-    AIGATE{"AI says\nBUY?"}
-    DROP_AI["❌ Skipped\nAI found no edge or risk too high"]
-
-    RISK["⚖️ STEP 8 — Risk Gates and Position Sizing\nEvery gate must pass before an order is placed:\nConfidence ≥ dynamic minimum bar\nR:R ratio acceptable · Bid-ask spread within limit\nNo fresh SEC 8-K filing in last 24 hours\nTotal open exposure below 40% of account equity\nDrawdown limit not breached\nPosition size computed:\nbase × ATR regime factor × VIX factor × yield curve factor × Kelly × confidence"]
-
-    RISKGATE{"All gates\npass?"}
-    DROP_RISK["❌ Blocked\nFails a risk gate — no order placed\nSymbol may be reconsidered next cycle"]
-
-    ORDER["✅ STEP 9 — Order Placed on Alpaca\nBracket order submitted:\nEntry leg — market or limit price\nStop-loss leg — auto-protection from the moment the fill confirms\nTake-profit leg — locks in gains at the target\nAll activity runs on the paper account"]
-
-    UNIVERSE --> GUARD
-    GUARD --> GUARDED
-    GUARDED -->|"stand_aside / circuit break"| BLOCKED
-    GUARDED -->|"proceed"| SCREEN
-    SCREEN --> SCAN
-    SCAN --> SCOREGATE
-    SCOREGATE -->|"No"| DROPSCORE
-    SCOREGATE -->|"Yes"| ENRICH
-    ENRICH --> PREFILTER
-    PREFILTER --> MECHGATE
-    MECHGATE -->|"Yes — blocked"| DROP_MECH
-    MECHGATE -->|"No — clear"| AI
-    AI --> AIGATE
-    AIGATE -->|"SKIP"| DROP_AI
-    AIGATE -->|"BUY"| RISK
-    RISK --> RISKGATE
-    RISKGATE -->|"fails"| DROP_RISK
-    RISKGATE -->|"passes"| ORDER
+  subgraph PM["⏱ Position Manager  every 2 min"]
+    MONITOR["Breakeven · trailing stop · partial profit · time-stop"]
+    CLOSE["💰 Close · log P&L"]
+    MONITOR -->|"exit triggered"| CLOSE
   end
 
-  %% ── POSITION MANAGER ────────────────────────────────────────────────────────
-  subgraph PM_SG["⏱ Position Manager  —  every 2 minutes"]
-    HOLDINGS["📒 Every Open Position is Checked\nStreet book reconciled against the trade journal\nBreakeven stop — move stop to entry once a profit cushion exists\nTrailing stop — ratchet stop up as the stock climbs\nPartial profit — sell half the position at the take-profit path\nTime-stop — force exit if held too long with no progress\nMissing stop-loss children automatically refilled"]
-    EXITGATE{"Exit\ntriggered?"}
-    HOLD["Hold position\nChecked again in 2 min"]
-    CLOSE["💰 Position Closed\nMarket sell placed · P&L recorded\nGFV settlement rule applied if bought today\nOutcome logged: win · loss · breakeven"]
-    HOLDINGS --> EXITGATE
-    EXITGATE -->|"No"| HOLD
-    HOLD --> HOLDINGS
-    EXITGATE -->|"Yes"| CLOSE
-  end
+  LEARN["📈 Learning Loop\nExpectancy · Kelly · cooling · setup suppression · confidence bar"]
+  EOD["🏁 EOD 3:45 PM\nFlatten all · daily summary · email recap"]
 
-  %% ── EOD ─────────────────────────────────────────────────────────────────────
-  EOD["🏁 End of Session  —  3:45 PM ET\nAll remaining positions flattened\nDaily summary written · dynamic watchlist persisted for tomorrow"]
+  DB[("💾 SQLite")]
+  BROKER["🏦 Broker"]
+  BACKTEST["🔬 Backtester  Sunday 8 AM"]
 
-  EMAIL["📧 Email Recap\nTrades · P&L · win rate · expectancy\nvs daily plan target"]
-
-  %% ── LEARNING LOOP ───────────────────────────────────────────────────────────
-  LEARN["📈 Learning Loop  —  updates after every closed trade\nExpectancy and win rate recalculated\nKelly factor adjusted — sizes up on strong form · down on weak form\nSymbol cooling list updated\nSetup-type performance tracked — losing setups suppressed automatically\nClaude confidence drift monitored for over- or under-confidence\nDynamic confidence bar raised if recent win rate has dropped"]
-
-  %% ── BACKTESTER ──────────────────────────────────────────────────────────────
-  BACKTEST["🔬 Backtester  —  Sunday 8 AM\nReplays historical bars against current strategy rules\nValidates edge before the week begins"]
-
-  %% ── INFRASTRUCTURE ──────────────────────────────────────────────────────────
-  BROKER["🏦 Broker\nBracket and market orders\nPositions · Bars · NBBO quotes"]
-
-  DB[("💾 SQLite Database\nTrade journal · decisions · open positions\ndaily summaries · expectancy history")]
-
-  %% ── WIRING ──────────────────────────────────────────────────────────────────
-  SCHED -->|"every 10 min · 9:35–3:45 ET"| CYCLE_SG
-  SCHED -->|"every 2 min"| PM_SG
-  SCHED -->|"every 2 min · 8:30–9:35 ET"| MORNING_SG
+  SCHED -->|"every 10 min"| CYCLE
+  SCHED -->|"every 2 min"| PM
   SCHED -->|"Sunday 8 AM"| BACKTEST
-
-  ANALYST -->|"posture + candidate list"| GUARD
-
+  MORNING -->|"posture + plan"| GUARD
   ORDER --> BROKER
   ORDER --> DB
-
-  HOLDINGS --> BROKER
+  MONITOR --> BROKER
   CLOSE --> DB
-
   CLOSE --> LEARN
   LEARN -->|"informs next cycle"| GUARD
-
-  PM_SG -->|"3:45 PM ET"| EOD
+  PM -->|"3:45 PM"| EOD
   EOD --> DB
-  EOD --> EMAIL
-
   BACKTEST --> DB
