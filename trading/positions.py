@@ -28,6 +28,7 @@ class PositionsMixin:
             take_profit = db.get("take_profit", round(entry_price * (1 + config.DEFAULT_TAKE_PROFIT_PCT), 2))
             trailing    = bool(db.get("trailing", False))
             highest     = float(db.get("highest_price") or entry_price)
+            _stop_updated = False   # tracks whether we called update_stop_loss this cycle
 
             # Move stop to breakeven at +BREAKEVEN_TRIGGER_PCT
             if self.risk_manager.should_move_to_breakeven(current_price, entry_price) and not trailing:
@@ -36,6 +37,7 @@ class PositionsMixin:
                 if ok:
                     stop_loss = breakeven
                     self.broker.update_stop_loss(symbol, breakeven)
+                    _stop_updated = True
                     self.database.save_position(symbol, entry_price, qty, stop_loss, take_profit,
                                   trailing=False, highest_price=current_price)
                     self.database.record_decision(symbol, "UPDATE_STOP", current_price, qty,
@@ -50,6 +52,7 @@ class PositionsMixin:
                     stop_loss = new_stop
                     trailing  = True
                     self.broker.update_stop_loss(symbol, new_stop)
+                    _stop_updated = True
                     self.database.save_position(symbol, entry_price, qty, stop_loss, take_profit,
                                   trailing=True, highest_price=current_price)
                     self.database.record_decision(symbol, "UPDATE_STOP", current_price, qty,
@@ -63,6 +66,7 @@ class PositionsMixin:
                 if ok:
                     stop_loss = new_stop
                     self.broker.update_stop_loss(symbol, new_stop)
+                    _stop_updated = True
                     self.database.save_position(symbol, entry_price, qty, stop_loss, take_profit,
                                   trailing=True, highest_price=current_price)
 
@@ -81,7 +85,7 @@ class PositionsMixin:
 
             # Stop-loss safety net: if no active stop order exists (e.g. after bot restart),
             # resubmit the DB stop so positions are never unprotected.
-            if not self.broker.has_active_stop_order(symbol, open_orders):
+            if not _stop_updated and not self.broker.has_active_stop_order(symbol, open_orders):
                 log.warning("No active stop order found for %s — resubmitting SL=%.2f",
                             symbol, stop_loss)
                 self.broker.update_stop_loss(symbol, stop_loss)

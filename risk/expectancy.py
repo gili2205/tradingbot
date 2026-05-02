@@ -88,7 +88,8 @@ class ExpectancyEngine:
 
             ts_str = d.get("ts", "")
             try:
-                ts = datetime.fromisoformat(ts_str).replace(tzinfo=timezone.utc)
+                _dt = datetime.fromisoformat(ts_str)
+                ts  = _dt.replace(tzinfo=timezone.utc) if _dt.tzinfo is None else _dt.astimezone(timezone.utc)
             except Exception:
                 ts = None
 
