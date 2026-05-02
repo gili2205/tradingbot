@@ -7,23 +7,23 @@ flowchart TD
     SCHED -->|"every 2 min"| POSMGMT
     SCHED -->|"Sunday 8 AM"| BACKTEST["🔬 Backtester"]
 
-    subgraph MORNING ["📋 Morning Study  (8:30–9:35 AM ET)"]
-        MS_IN["macro calendar · pre-market levels · yield curve\nshort interest · overnight news · recent trade history"]
-        ANALYST["Claude LLM → daily plan\nbias · posture · candidate list · thresholds"]
+    subgraph MORNING ["📋 Morning Study  (8:30–9:35 AM ET · runs inside 2-min job)"]
+        MS_IN["macro calendar · pre-market levels · yield curve\nshort interest · overnight news · recent trade history\npre-warms screener, dark pool & pre-market caches"]
+        ANALYST["Claude LLM → daily plan\nbias · posture · candidate list · session overrides"]
         MS_IN --> ANALYST
     end
 
     ANALYST -->|"posture: normal / conservative / stand_aside"| CYCLE
 
-    subgraph CYCLE ["🔄 Trade Cycle  (every 10 min)"]
-        SCREEN["🔍 Screener\nfull NYSE/NASDAQ sweep → rank by dollar_vol × momentum\n50 snapshot + 30 most-actives + 20 gainers + 69 watchlist · cap 150"]
-        SCREEN --> SCAN["📊 Bars + 40 indicators\nEMA · MACD · RSI · ATR · VWAP · FVG · key levels · RS vs SPY"]
-        SCAN --> SCORER["🎯 Signal Scorer  →  drop score < 6.0"]
-        SCORER --> ENRICH["📦 Parallel enrichment\noptions flow · dark pool · insider buys\nshort interest · pre-market levels · news"]
-        ENRICH --> GUARD["🛡️ Market Guards\ncircuit breaker · VIX · yield curve · earnings blackout"]
-        GUARD --> AGENT["🤖 Claude LLM  →  BUY / SELL / SKIP\nentry · stop · target · confidence · R:R"]
-        AGENT --> RISK["⚖️ Risk Gates\ndrawdown · exposure · position size · R:R · sector bucket · GFV · expectancy"]
-        RISK -->|"all pass"| EXEC["✅ Size & Place Order\nATR × VIX × yield curve × Kelly × confidence\n→ Alpaca paper trade"]
+    subgraph CYCLE ["🔄 Trade Cycle  (every 10 min · midday throttled to 20 min)"]
+        GUARD["🛡️ Market Context  ← evaluated first every cycle\ncircuit breaker · VIX size factor · yield curve size factor\nmarket structure · intraday regime · dynamic confidence bar · cooling symbols"]
+        GUARD --> SCREEN["🔍 Screener\nALL NYSE/NASDAQ → price band + volume filter\nrank: dollar_vol × absolute move × relative rank vs universe\n50 snapshot + 30 most-actives + 20 gainers + watchlist candidates · cap 150"]
+        SCREEN --> SCAN["📊 Bars + 40 indicators  (5 min · 15 min · 1 day)\nEMA · MACD · RSI · ATR · VWAP · RS vs SPY · FVG · key levels\nvolume profile · HTF bias · drop: ATR too high / price too low / dead stocks"]
+        SCAN --> SCORER["🎯 Signal Scorer  →  drop score < 6.0\nre-order by sector ETF rotation strength"]
+        SCORER --> ENRICH["📦 Parallel enrichment  (6 sources · 20 s hard cap)\noptions flow · dark pool · insider buys · short interest · pre-market levels · news"]
+        ENRICH --> PREFILTER["🔎 Pre-Claude Filter  (deterministic — no AI)\nbucket occupied by open position · earnings blackout · symbol cooling\n→ cap surviving candidates at 20"]
+        PREFILTER --> AGENT["🤖 Claude LLM  →  BUY / SELL / SKIP\nentry · stop · target · confidence 1–10 · R:R"]
+        AGENT --> EXEC["⚖️ Risk Gates + Sizing + Order\ncircuit breaker · EDGAR 8-K · GFV · drawdown · exposure\nposition size · R:R · spread · sector bucket · portfolio heat\nsizing: base × ATR regime × VIX × yield curve × Kelly × confidence\n→ broker.place_market_order()  (Alpaca paper)"]
     end
 
     EXEC --> DB[("SQLite")]

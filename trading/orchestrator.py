@@ -156,7 +156,10 @@ class TradingOrchestrator(ScannerMixin, PositionsMixin, ExecutorMixin, TradeCycl
             pnl           = float(getattr(pos, "unrealized_pl",  0) or 0)
             current_price = float(getattr(pos, "current_price",  0) or 0)
             qty           = float(getattr(pos, "qty",            0) or 0)
-            self.broker.close_position(symbol)
+            if not self.broker.close_position(symbol):
+                log.error("EOD: broker rejected close for %s — position left open, skipping DB cleanup",
+                          symbol)
+                continue
             self.database.remove_position(symbol)
             self.gfv_tracker.remove_buy(symbol)
             with self._state_lock:

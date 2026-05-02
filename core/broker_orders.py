@@ -12,18 +12,20 @@ class OrdersMixin:
         """
         self._trade_client.cancel_orders()
 
-    def close_position(self, symbol: str) -> None:
+    def close_position(self, symbol: str) -> bool:
         """Args:
             symbol: Position symbol to flatten.
 
         Returns:
-            None.
+            True if the broker confirmed the close; False on any error.
         """
         try:
             self._trade_client.close_position(symbol)
             log.info("Closed position: %s", symbol)
+            return True
         except Exception as e:
             log.error("Failed to close %s: %s", symbol, e)
+            return False
 
     def place_market_order(self, symbol: str, qty: float, side: str) -> object:
         """Submit a day market order.
