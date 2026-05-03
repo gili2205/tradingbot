@@ -226,7 +226,22 @@ class MarketDataMixin:
 
         self._news_cache    = result
         self._news_cache_ts = now
-        log.info("News: %d/%d watchlist symbols have headlines", len(result), len(symbols))
+
+        # Merge real-time WebSocket articles on top of REST results.
+        # Stream articles are prepended — breaking news appears immediately
+        # rather than waiting for the next 15-min REST poll cycle.
+        stream = getattr(self, "_news_stream", None)
+        if stream is not None:
+            stream_news = stream.get_news(symbols, max_age_minutes=30)
+            for sym, articles in stream_news.items():
+                existing_headlines = {a["headline"] for a in result.get(sym, [])}
+                fresh = [a for a in articles if a["headline"] not in existing_headlines]
+                if fresh:
+                    result[sym] = fresh + result.get(sym, [])
+
+        stream_label = " (stream active)" if (stream and getattr(stream, "is_connected", False)) else ""
+        log.info("News: %d/%d watchlist symbols have headlines%s",
+                 len(result), len(symbols), stream_label)
         return {s: result[s] for s in symbols if s in result}
 
     def get_all_tradeable_symbols(self) -> list[str]:

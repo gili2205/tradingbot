@@ -24,16 +24,23 @@ def main():
         action="store_true",
         help="Log AI decisions without placing orders",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass market-hours gates so the pipeline runs at any time (use with --dry-run)",
+    )
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, graceful_exit)
     signal.signal(signal.SIGTERM, graceful_exit)
 
     log.info("=" * 60)
-    log.info(
-        "Autonomous Stock Trading Bot — starting up%s",
-        "  [DRY-RUN]" if args.dry_run else "",
-    )
+    suffix = ""
+    if args.dry_run:
+        suffix += "  [DRY-RUN]"
+    if args.force:
+        suffix += "  [FORCE]"
+    log.info("Autonomous Stock Trading Bot — starting up%s", suffix)
     log.info(
         "Account target: $%.0f | Max daily deploy: $%.0f",
         config.ACCOUNT_SIZE,
@@ -47,6 +54,8 @@ def main():
     log.info("=" * 60)
 
     orchestrator, backtester = build_trading_stack(dry_run=args.dry_run)
+    if args.force:
+        orchestrator.set_force_run(True)
 
     executors = {"default": ThreadPoolExecutor(max_workers=2)}
     scheduler = BackgroundScheduler(executors=executors, timezone=config.ET)

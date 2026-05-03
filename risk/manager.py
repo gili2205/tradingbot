@@ -71,9 +71,7 @@ class RiskManager:
         if num_positions >= config.MAX_CONCURRENT_POSITIONS:
             return False, f"Max concurrent positions ({config.MAX_CONCURRENT_POSITIONS}) reached"
 
-        # Position size bounds
-        if cost > config.MAX_POSITION_SIZE:
-            return False, f"Position ${cost:.0f} > max ${config.MAX_POSITION_SIZE:.0f}"
+        # Position size floor
         if cost < config.MIN_POSITION_SIZE:
             return False, f"Position ${cost:.0f} < min ${config.MIN_POSITION_SIZE:.0f}"
 
@@ -198,7 +196,8 @@ class RiskManager:
     def calc_qty(price: float, stop_loss: float, settled_cash: float,
                  deployed_today: float, total_equity: float,
                  atr: float = 0.0, confidence: int = 9,
-                 vix_factor: float = 1.0, kelly_factor: float = 1.0) -> float:
+                 vix_factor: float = 1.0, kelly_factor: float = 1.0,
+                 position_cap: float | None = None) -> float:
         """Compute the whole-share position size with four cascading adjustments.
 
         Sizing waterfall:
@@ -264,8 +263,9 @@ class RiskManager:
             shares_by_risk *= max(0.25, min(kelly_factor, 1.5))
             log.info("Kelly factor %.3f applied to sizing", kelly_factor)
 
-        # Cap by position size limit
-        shares_by_size = config.MAX_POSITION_SIZE / price
+        # Cap by position size limit — use dynamic cap if provided, else config default
+        effective_cap  = position_cap if position_cap is not None else config.MAX_POSITION_SIZE
+        shares_by_size = effective_cap / price
 
         # Cap by available capital headroom
         available = min(

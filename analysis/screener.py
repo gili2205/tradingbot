@@ -44,6 +44,7 @@ class Screener:
         self.broker = broker
         self._snapshot_cache: list[str] = []
         self._snapshot_cache_ts = None
+        self._snapshot_raw: list[dict] = []   # raw candidates with change_pct, used by gainers
         self.SNAPSHOT_CACHE_TTL_MIN = 15
         self.SNAPSHOT_MIN_DOLLAR_VOLUME = 5_000_000   # $5M — institutional liquidity threshold
         self.SNAPSHOT_MIN_MOVE_PCT = 0.5              # must be moving ≥ 0.5% from yesterday
@@ -108,41 +109,29 @@ class Screener:
 
     def _fetch_gainers(self, top: int = 50) -> list[str]:
         """
-        Fetch top gainers by % change — catalyst / momentum stocks for the day.
+        Return top gainers by % change, derived from the already-fetched snapshot.
 
-        Applies price band filter (config.SCREENER_MIN_PRICE to
-        config.SCREENER_MAX_PRICE) and requires at least 0.5% gain.
+        Uses _snapshot_raw (populated by _snapshot_screen) so no extra API call
+        is needed. Falls back to empty list if the snapshot has not been populated yet.
 
         Args:
-            top: Maximum number of gainers to request from the API.
+            top: Maximum number of gainers to return.
 
         Returns:
-            List of valid symbol strings that pass the price/move filters,
-            or empty list on failure.
+            List of symbol strings sorted by % change descending, capped at top.
         """
-        try:
-            resp = requests.get(
-                f"{_DATA_BASE}/v1beta1/screener/stocks/movers",
-                headers=Screener._headers(),
-                params={"top": top},
-                timeout=8,
-            )
-            resp.raise_for_status()
-            symbols = []
-            for item in resp.json().get("gainers", []):
-                sym     = item.get("symbol", "")
-                price   = float(item.get("price") or 0)
-                chg_pct = float(item.get("percent_change") or 0)
-                if not Screener._valid_sym(sym):
-                    continue
-                if config.SCREENER_MIN_PRICE <= price <= config.SCREENER_MAX_PRICE:
-                    if chg_pct >= 0.5:
-                        symbols.append(sym)
-            log.info("Screener top-gainers: %d symbols", len(symbols))
-            return symbols
-        except Exception as e:
-            log.warning("movers screener failed (%s) — skipping gainers", e)
+        if not self._snapshot_raw:
+            log.warning("Screener gainers: snapshot not yet available — skipping")
             return []
+
+        gainers = sorted(
+            (d for d in self._snapshot_raw if d["change_pct"] >= 0.5),
+            key=lambda d: d["change_pct"],
+            reverse=True,
+        )
+        symbols = [d["sym"] for d in gainers[:top]]
+        log.info("Screener top-gainers: %d symbols (derived from snapshot)", len(symbols))
+        return symbols
 
     def _snapshot_screen(self, top: int = 300) -> list[str]:
         """
@@ -225,6 +214,7 @@ class Screener:
 
         self._snapshot_cache    = result
         self._snapshot_cache_ts = now
+        self._snapshot_raw      = raw_candidates   # preserve for gainers derivation
         return result
 
     def build_universe(self) -> list[str]:

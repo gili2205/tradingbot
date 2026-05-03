@@ -23,7 +23,6 @@ Cache: 1 hour (intraday bond/yield data changes slowly; one refresh per hour is 
 """
 import yfinance as yf
 import pandas as pd
-import requests
 from datetime import datetime, timezone
 from core.database import log
 
@@ -50,13 +49,6 @@ class YieldCurveClient:
         """Initialize the yield curve client with an empty cache."""
         self._cache: dict | None = None
         self._cache_ts: datetime | None = None
-
-        # yfinance has no built-in timeout; inject a session so hung Yahoo connections
-        # don't block the scan thread indefinitely.
-        self._yf_session = requests.Session()
-        self._yf_session.request = lambda method, url, **kw: requests.Session.request(  # type: ignore[method-assign]
-            self._yf_session, method, url, timeout=kw.pop("timeout", 15), **kw
-        )
 
     def get_yield_curve(self, force_refresh: bool = False) -> dict:
         """Return current yield curve + credit spread signal.
@@ -115,7 +107,6 @@ class YieldCurveClient:
                 auto_adjust=True,
                 progress=False,
                 threads=True,
-                session=self._yf_session,
             )
 
             if tickers is None or tickers.empty:

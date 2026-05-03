@@ -72,11 +72,23 @@ class TradingOrchestrator(ScannerMixin, PositionsMixin, ExecutorMixin, TradeCycl
         self._eod_done:             bool           = False
         self._daily_pre_passed:     set            = set()
         self._scan_active:          bool           = False
+        self._force_run:            bool           = False
 
-        self._state_lock = threading.Lock()
+        self._state_lock  = threading.Lock()
+        self._broker_lock = threading.Lock()  # serialises broker-state writes between jobs
 
         self._ET = config.ET
         self._SCAN_TIMEOUT_SECONDS = 480
+
+    def set_force_run(self, flag: bool):
+        """Bypass all market-hours and timing gates so the pipeline runs at any time.
+
+        Intended for end-to-end testing outside market hours. Always combine with
+        set_dry_run(True) to avoid placing real orders.
+        """
+        self._force_run = flag
+        if flag:
+            log.info("=== FORCE MODE: market-hours gates bypassed — pipeline will run immediately ===")
 
     def set_dry_run(self, flag: bool):
         """Args:

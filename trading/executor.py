@@ -3,6 +3,17 @@ import config
 from core.database import log
 
 
+def _conviction_cap(signal_score: float, deployed_today: float) -> float:
+    """Return the max dollar amount for this trade based on signal score and remaining capital."""
+    remaining = config.MAX_DAILY_CAPITAL - deployed_today
+    fraction  = config.CONVICTION_TIERS[-1][1]  # default: lowest tier
+    for min_score, frac in config.CONVICTION_TIERS:
+        if signal_score >= min_score:
+            fraction = frac
+            break
+    return min(config.MAX_DAILY_CAPITAL * fraction, remaining)
+
+
 class ExecutorMixin:
     def execute_decisions(
         self,
@@ -41,6 +52,8 @@ class ExecutorMixin:
         if dynamic_confidence_bar <= 0:
             dynamic_confidence_bar = config.MIN_SIGNAL_CONFIDENCE
 
+        _score_lookup = signal_score_lookup or {}
+
         if self._dry_run:
             log.info("[DRY-RUN] AI returned %d decisions — no orders will be placed:", len(decisions))
             for d in decisions:
@@ -50,11 +63,42 @@ class ExecutorMixin:
                 ep     = d.get("entry_price")
                 sl     = d.get("stop_loss")
                 tp     = d.get("take_profit")
-                qty    = d.get("qty")
                 conf   = d.get("signal_confidence")
-                rr     = d.get("reward_to_risk")
-                risk   = d.get("risk_per_trade_dollars")
                 reason = str(d.get("reason_for_entry") or "")[:90]
+
+                # For BUY decisions, replace LLM's SL/TP/R:R with what the risk manager
+                # would actually use — the LLM's self-reported values are unreliable.
+                qty  = None
+                rr   = None
+                risk = None
+                if final == "BUY" or action == "BUY":
+                    try:
+                        price = ep or self.broker.get_latest_price(sym)
+                        if price:
+                            df  = self.broker.get_bars(sym, "5Min", days=2)
+                            df  = self.indicators.compute_indicators(df)
+                            atr = float(df["atr"].iloc[-1]) if not df.empty else price * 0.01
+                            rm_sl, rm_tp = self.risk_manager.compute_stop_take_profit(
+                                price, atr, key_levels=self._key_levels_cache.get(sym))
+                            if rm_sl and rm_tp:
+                                sl = rm_sl
+                                tp = rm_tp
+                            _dry_score = float((_score_lookup or {}).get(sym) or 0.0)
+                            _dry_cap   = _conviction_cap(_dry_score, self._deployed_today)
+                            qty_val = self.risk_manager.calc_qty(
+                                price, sl, settled_cash, self._deployed_today,
+                                equity, atr=atr, confidence=conf or 5,
+                                vix_factor=vix_factor, kelly_factor=kelly_factor,
+                                position_cap=_dry_cap)
+                            qty  = qty_val if qty_val > 0 else None
+                            if sl and tp and ep:
+                                stop_dist   = ep - sl
+                                reward_dist = tp - ep
+                                rr   = round(reward_dist / stop_dist, 2) if stop_dist > 0 else None
+                                risk = round(stop_dist * (qty or 0), 2) if qty else None
+                    except Exception:
+                        pass
+
                 log.info("  [%s] %-6s  action=%-12s  entry=%-8s  SL=%-8s  TP=%-8s  "
                          "qty=%-5s  conf=%s  R:R=%s  risk=$%s",
                          final, sym, action,
@@ -68,8 +112,6 @@ class ExecutorMixin:
 
         open_symbols  = {p["symbol"] for p in positions_snapshot}
         num_positions = len(open_symbols)
-
-        _score_lookup = signal_score_lookup or {}
 
         for d in decisions:
             symbol = (d.get("symbol") or "").upper()
@@ -222,10 +264,25 @@ class ExecutorMixin:
                     log.info("CORRELATION veto %s: %s", symbol, corr_reason)
                     continue
 
+                # Conviction-weighted cap: higher signal score → larger slice of daily capital.
+                # Falls back to remaining capital if less than the intended tier amount.
+                _sym_score     = float(_score_lookup.get(symbol) or 0.0)
+                conviction_cap = _conviction_cap(_sym_score, self._deployed_today)
+                if conviction_cap <= 0:
+                    self.database.record_decision(symbol, "SKIP", price,
+                                    reasoning="Daily capital exhausted — conviction cap below minimum",
+                                    signal_score=_ss, veto_rule="QTY_ZERO")
+                    log.info("Daily capital exhausted for %s — skipping", symbol)
+                    continue
+                log.info("Conviction cap %s: score=%.1f → $%.0f (%.0f%% of $%.0f daily cap)",
+                         symbol, _sym_score, conviction_cap,
+                         conviction_cap / config.MAX_DAILY_CAPITAL * 100, config.MAX_DAILY_CAPITAL)
+
                 # Volatility-adjusted, confidence-scaled, VIX + Kelly-aware sizing
                 qty = self.risk_manager.calc_qty(price, stop_loss, settled_cash, self._deployed_today,
                                   equity, atr=atr, confidence=confidence,
-                                  vix_factor=vix_factor, kelly_factor=kelly_factor)
+                                  vix_factor=vix_factor, kelly_factor=kelly_factor,
+                                  position_cap=conviction_cap)
                 if qty <= 0:
                     self.database.record_decision(symbol, "SKIP", price,
                                     reasoning="qty=0 after vol-adjusted sizing",

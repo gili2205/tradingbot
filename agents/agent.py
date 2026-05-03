@@ -14,7 +14,7 @@ class TradingAgent:
         self._client = anthropic.Anthropic(
             api_key=config.ANTHROPIC_API_KEY,
             timeout=120.0,
-            max_retries=0,
+            max_retries=config.CLAUDE_MAX_RETRIES,
         )
 
     def ask_agent(
@@ -28,17 +28,7 @@ class TradingAgent:
     ) -> list[dict]:
         """Call the LLM with scan context and return parsed trade decisions.
 
-        Args:
-            watchlist_data: Scored candidates (symbol, indicators, biases, etc.).
-            open_positions: Current positions for HOLD/SELL/PARTIAL review.
-            account: Equity, cash, deployment, limits (see trade_cycle account_ctx).
-            recent_decisions: Recent DB rows for continuity (last 20 sent in prompt).
-            daily_plan: Morning study plan, or None.
-            bucket_report: Open exposure by sector bucket, or None.
-
-        Returns:
-            List of decision dicts (symbol, action, prices, confidence, etc.).
-            Empty list on JSON/API failure.
+        Returns empty list on failure — caller should invoke rule_based_fallback().
         """
         history_text = json.dumps(recent_decisions[-20:], indent=2) if recent_decisions else "[]"
         plan_text    = json.dumps(daily_plan, indent=2) if daily_plan else "NOT AVAILABLE — trade conservatively"
@@ -123,5 +113,55 @@ Return your JSON decision array now."""
             log.error("AI returned invalid JSON: %s | raw=%s", e, raw[:400])
             return []
         except Exception as e:
-            log.error("AI call failed: %s", e)
+            log.error("AI call failed after %d retries: %s", config.CLAUDE_MAX_RETRIES, e)
             return []
+
+    @staticmethod
+    def rule_based_fallback(
+        watchlist_data: list[dict],
+        open_positions: list[dict],
+    ) -> list[dict]:
+        """Generate decisions purely from signal scores when Claude is unavailable.
+
+        BUY:  score >= 7.5 (strong/high-conviction bands that have proven positive edge)
+        HOLD: any open position (mechanical stops handle exits)
+        SKIP: everything else
+
+        This is a safety net — it should fire rarely and only when the Claude API
+        is completely unreachable after retries.
+        """
+        decisions = []
+
+        for pos in open_positions:
+            sym = (pos.get("symbol") or "").upper()
+            if sym:
+                decisions.append({
+                    "symbol":            sym,
+                    "action":            "HOLD",
+                    "final_decision":    "HOLD",
+                    "signal_confidence": 7,
+                    "reason_for_entry":  "Rule-based fallback: Claude unavailable — holding open position, mechanical stops active",
+                })
+
+        buys = 0
+        max_buys = config.MAX_CONCURRENT_POSITIONS - len(open_positions)
+        for item in watchlist_data:
+            if buys >= max_buys:
+                break
+            sym   = (item.get("symbol") or "").upper()
+            score = float(item.get("signal_score") or 0.0)
+            if score >= 7.5 and sym:
+                decisions.append({
+                    "symbol":            sym,
+                    "action":            "BUY",
+                    "final_decision":    "BUY",
+                    "signal_confidence": min(10, int(score)),
+                    "setup_type":        item.get("setup_type_hint", "momentum"),
+                    "reason_for_entry":  f"Rule-based fallback: score={score:.1f} ≥7.5, Claude unavailable",
+                    "reason_to_avoid":   "",
+                })
+                buys += 1
+
+        log.warning("Rule-based fallback fired: %d decisions (%d BUY, %d HOLD)",
+                    len(decisions), buys, len(open_positions))
+        return decisions

@@ -20,35 +20,39 @@ class TradeCycleMixin:
 
         hour, minute = now.hour, now.minute
 
-        in_premarket_study = self.is_in_study_window(hour, minute)
-        if not self.broker.is_market_open() and not in_premarket_study:
-            return
-
-        if (hour == config.MARKET_CLOSE_HOUR and minute >= config.MARKET_CLOSE_MIN) or \
-           hour > config.MARKET_CLOSE_HOUR:
-            return  # EOD handled by position management
-
-        cur_min     = hour * 60 + minute
-        study_start = config.STUDY_START_HOUR * 60 + config.STUDY_START_MIN
-        if cur_min < study_start:
-            return
-
-        # Don't scan until morning study is complete.
-        # Try loading a cached plan first — handles the race where the scan job fires
-        # at the same instant as position management on startup.
-        if not self._study_complete:
-            cached = self.market_analyst.load_todays_plan()
-            if cached:
-                self._daily_plan    = cached
-                self._study_complete = True
-                log.info("SCAN: loaded cached daily plan")
-            else:
-                log.info("SCAN: skipped — morning study not yet complete")
+        if self._force_run:
+            log.info("SCAN: force mode — bypassing market-hours and study gates")
+            self._study_complete = True
+        else:
+            in_premarket_study = self.is_in_study_window(hour, minute)
+            if not self.broker.is_market_open() and not in_premarket_study:
                 return
 
-        # Skip the study window itself — scanning during study is pointless
-        if self.is_in_study_window(hour, minute):
-            return
+            if (hour == config.MARKET_CLOSE_HOUR and minute >= config.MARKET_CLOSE_MIN) or \
+               hour > config.MARKET_CLOSE_HOUR:
+                return  # EOD handled by position management
+
+            cur_min     = hour * 60 + minute
+            study_start = config.STUDY_START_HOUR * 60 + config.STUDY_START_MIN
+            if cur_min < study_start:
+                return
+
+            # Don't scan until morning study is complete.
+            # Try loading a cached plan first — handles the race where the scan job fires
+            # at the same instant as position management on startup.
+            if not self._study_complete:
+                cached = self.market_analyst.load_todays_plan()
+                if cached:
+                    self._daily_plan    = cached
+                    self._study_complete = True
+                    log.info("SCAN: loaded cached daily plan")
+                else:
+                    log.info("SCAN: skipped — morning study not yet complete")
+                    return
+
+            # Skip the study window itself — scanning during study is pointless
+            if self.is_in_study_window(hour, minute):
+                return
 
         # Account state
         broker_acct  = self.broker.get_account()
@@ -75,6 +79,26 @@ class TradeCycleMixin:
             "exposure_cap_pct":      int(config.MAX_TOTAL_EXPOSURE_PCT * 100),
             "max_daily_capital":     config.MAX_DAILY_CAPITAL,
         }
+
+        # Early exit: daily capital exhausted.
+        # No new BUYs are possible, so running the full pipeline (universe build,
+        # enrichment, Claude call) produces no value. The 2-min position manager
+        # already handles everything open positions need: trailing stops, time stops,
+        # partial profits, and bracket exit detection.
+        if account_ctx["available_today"] <= 0:
+            if account_ctx["open_positions"] > 0:
+                log.info(
+                    "Daily capital exhausted ($%.0f deployed) — "
+                    "%d open position(s) handled by position manager, skipping full scan",
+                    self._deployed_today, account_ctx["open_positions"],
+                )
+            else:
+                log.info(
+                    "Daily capital exhausted ($%.0f deployed) and no open positions "
+                    "— skipping scan until tomorrow",
+                    self._deployed_today,
+                )
+            return
 
         in_high_vol_window = self.is_high_volume_window(hour, minute)
         midday             = not in_high_vol_window
@@ -408,21 +432,44 @@ class TradeCycleMixin:
             ai_candidates, positions_snapshot, account_ctx,
             self.database.get_recent_decisions(30), self._daily_plan, bucket_report,
         )
-        log.info("AI returned %d decisions", len(decisions))
+
+        # Rule-based fallback: Claude unavailable after retries
+        if not decisions and (ai_candidates or positions_snapshot):
+            log.warning("Claude returned no decisions — activating rule-based fallback")
+            decisions = self.trading_agent.rule_based_fallback(ai_candidates, positions_snapshot)
+
+        log.info("Decisions: %d (%s)", len(decisions),
+                 "AI" if decisions and "Rule-based" not in str(decisions[0].get("reason_for_entry", "")) else "FALLBACK")
 
         # Kelly Criterion sizing factor (uses the same recent_decisions already loaded)
         kelly = self.expectancy_engine.compute_kelly_factor(recent_decisions)
         if kelly != 1.0:
             log.info("Kelly factor %.3f (n=%d closed trades)", kelly, len(recent_decisions))
 
-        # Execute — lock while updating shared counters
-        self.execute_decisions(decisions, positions_snapshot, settled_cash, equity,
-                               effective_daily_pnl=effective_daily_pnl,
-                               dynamic_confidence_bar=dyn_conf_bar,
-                               vix_factor=vix_factor, kelly_factor=kelly,
-                               cooling_symbols=cooling_symbols,
-                               suppressed_setups=suppressed_setups,
-                               signal_score_lookup=signal_score_lookup,
-                               sector_strength=sector_str)
+        # Mid-session PnL degradation: reduce position sizes as intraday losses build.
+        # Compounded into vix_factor so it flows through calc_qty automatically.
+        pnl_factor = 1.0
+        if equity > 0:
+            pnl_pct = effective_daily_pnl / equity
+            for threshold, factor in config.INTRADAY_PNL_TIERS:
+                if pnl_pct <= threshold:
+                    pnl_factor = factor
+                    log.warning(
+                        "Intraday PnL degradation: daily P&L %.1f%% ≤ %.1f%% — sizing ×%.2f",
+                        pnl_pct * 100, threshold * 100, factor,
+                    )
+                    break
+        vix_factor = round(vix_factor * pnl_factor, 4)
+
+        # Execute — broker_lock serialises writes against position management job
+        with self._broker_lock:
+            self.execute_decisions(decisions, positions_snapshot, settled_cash, equity,
+                                   effective_daily_pnl=effective_daily_pnl,
+                                   dynamic_confidence_bar=dyn_conf_bar,
+                                   vix_factor=vix_factor, kelly_factor=kelly,
+                                   cooling_symbols=cooling_symbols,
+                                   suppressed_setups=suppressed_setups,
+                                   signal_score_lookup=signal_score_lookup,
+                                   sector_strength=sector_str)
 
         self._last_full_scan_ts = now

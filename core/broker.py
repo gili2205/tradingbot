@@ -53,6 +53,7 @@ class AlpacaBroker(OrdersMixin, MarketDataMixin):
         self._asset_cache_date: str = ""
         self._news_cache: dict[str, list] = {}
         self._news_cache_ts: datetime | None = None
+        self._news_stream: object | None = None  # NewsStream; set by bootstrap after start()
 
     def get_account(self):
         """Returns:

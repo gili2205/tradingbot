@@ -263,37 +263,40 @@ class PositionsMixin:
 
         hour, minute = now.hour, now.minute
 
-        # Allow pre-market study to run from 8:30 ET (before exchange opens at 9:30)
-        in_premarket_study = self.is_in_study_window(hour, minute)
-        if not self.broker.is_market_open() and not in_premarket_study:
-            log.info("Market closed — skipping cycle")
-            return
+        if self._force_run:
+            log.info("POSITION MGMT: force mode — bypassing market-hours gates")
+        else:
+            # Allow pre-market study to run from 8:30 ET (before exchange opens at 9:30)
+            in_premarket_study = self.is_in_study_window(hour, minute)
+            if not self.broker.is_market_open() and not in_premarket_study:
+                log.info("Market closed — skipping cycle")
+                return
 
-        # EOD close — runs exactly once per session
-        if (hour == config.MARKET_CLOSE_HOUR and minute >= config.MARKET_CLOSE_MIN) or \
-           hour > config.MARKET_CLOSE_HOUR:
-            if not self._eod_done:
-                try:
-                    self.eod_close_all()
-                    self._eod_done = True
-                except Exception as exc:
-                    log.error("EOD close failed: %s — will retry on next tick", exc)
-                    return
-                try:
-                    self.write_daily_summary()
-                except Exception as exc:
-                    log.error("EOD summary failed: %s", exc)
-            else:
-                log.info("EOD already completed for today — skipping cycle")
-            return
+            # EOD close — runs exactly once per session
+            if (hour == config.MARKET_CLOSE_HOUR and minute >= config.MARKET_CLOSE_MIN) or \
+               hour > config.MARKET_CLOSE_HOUR:
+                if not self._eod_done:
+                    try:
+                        self.eod_close_all()
+                        self._eod_done = True
+                    except Exception as exc:
+                        log.error("EOD close failed: %s — will retry on next tick", exc)
+                        return
+                    try:
+                        self.write_daily_summary()
+                    except Exception as exc:
+                        log.error("EOD summary failed: %s", exc)
+                else:
+                    log.info("EOD already completed for today — skipping cycle")
+                return
 
-        # Too early — before study window
-        cur_min     = hour * 60 + minute
-        study_start = config.STUDY_START_HOUR * 60 + config.STUDY_START_MIN
-        if cur_min < study_start:
-            log.info("Pre-market — waiting for study window (%02d:%02d ET)",
-                     config.STUDY_START_HOUR, config.STUDY_START_MIN)
-            return
+            # Too early — before study window
+            cur_min     = hour * 60 + minute
+            study_start = config.STUDY_START_HOUR * 60 + config.STUDY_START_MIN
+            if cur_min < study_start:
+                log.info("Pre-market — waiting for study window (%02d:%02d ET)",
+                         config.STUDY_START_HOUR, config.STUDY_START_MIN)
+                return
 
         # Gather account state (needed for both study and trading)
         broker_acct  = self.broker.get_account()
@@ -386,7 +389,8 @@ class PositionsMixin:
                  self._daily_pnl, self._deployed_today, exposure_pct,
                  self._trades_today, config.MAX_TRADES_PER_DAY)
 
-        positions_snapshot = self.build_positions_snapshot()
+        with self._broker_lock:
+            positions_snapshot = self.build_positions_snapshot()
 
         # Effective PnL = realized + unrealized — used for drawdown guard
         unrealized_pnl      = sum(p.get("pnl", 0) for p in positions_snapshot)

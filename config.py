@@ -38,14 +38,36 @@ MAX_TOTAL_EXPOSURE_PCT = 0.40       # hard ceiling 40% of equity = $4,000 (match
 MIN_TOTAL_EXPOSURE_PCT = 0.15       # aim to deploy at least 15% when conditions allow
 
 # Position limits
-MAX_CONCURRENT_POSITIONS = 4        # max 4 stocks simultaneously
-MAX_POSITION_SIZE        = 1_000.0  # max $ per position; 3 positions fit within $3K exposure cap
-MIN_POSITION_SIZE        = 200.0    # min $ per position
-MAX_TRADES_PER_DAY       = 10       # Rule 16: quality over quantity
+MAX_CONCURRENT_POSITIONS = 4           # max 4 stocks simultaneously
+MAX_POSITION_SIZE        = MAX_DAILY_CAPITAL  # hard ceiling = full daily cap; conviction tiers govern actual sizing
+MIN_POSITION_SIZE        = 0.0         # no minimum position size
+MAX_TRADES_PER_DAY       = 10          # Rule 16: quality over quantity
+
+# Conviction-weighted position sizing.
+# Each entry is (min_signal_score, fraction_of_MAX_DAILY_CAPITAL).
+# Tiers are evaluated in order; first match wins.
+# Actual cap = min(intended, remaining daily capital) — never exceeds what's left.
+CONVICTION_TIERS = [
+    (8.5, 0.60),   # high-conviction  (≥8.5): up to 60% of daily capital (~$2,400)
+    (7.5, 0.50),   # strong           (≥7.5): up to 50%                   (~$2,000)
+    (0.0, 0.30),   # below 7.5:               up to 30%                   (~$1,200)
+]
 
 # High-conviction threshold: allows a second position in the same sector bucket
 # (does NOT override position sizing — all positions are still risk-sized)
 HIGH_CONVICTION_THRESHOLD = 9
+
+# Mid-session PnL degradation — reduce position sizes as intraday losses accumulate.
+# Each entry: (daily_pnl_pct_threshold, size_multiplier).
+# Tiers are evaluated in order; first match (most severe) wins.
+# Hard stop at -2% is enforced separately by DAILY_DRAWDOWN_LIMIT.
+INTRADAY_PNL_TIERS = [
+    (-0.015, 0.40),   # -1.5%+ drawdown: size ×0.40 — severe, one bad trade from hard stop
+    (-0.010, 0.70),   # -1.0%+ drawdown: size ×0.70 — early warning, dial back aggression
+]
+
+# Claude API retry — Anthropic SDK handles exponential backoff automatically
+CLAUDE_MAX_RETRIES = 3
 
 # Quality filters
 MIN_REWARD_TO_RISK    = 2.0         # minimum 2:1 R:R — cut losses fast, let winners run
@@ -194,7 +216,7 @@ MAX_TRADEABLE_ATR_PCT = 0.05   # 5% ATR/price is the absolute cap
 
 # Signal quality gate
 # Items below this score are dropped before the AI even sees them
-MIN_SIGNAL_SCORE_TO_AI = 6.0   # must match per-mode bars — 5.0–5.9 items waste API calls
+MIN_SIGNAL_SCORE_TO_AI = 5.0   # must match per-mode bars — 5.0–5.9 items waste API calls
 
 # VIX regime-aware sizing
 # SPY 10-day realized volatility (annualized %) is used as a market fear proxy.

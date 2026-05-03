@@ -1,5 +1,6 @@
 import config
 from agents.agent import TradingAgent
+from data.news_stream import NewsStream
 from agents.analyst import MarketAnalyst
 from agents.dynamic_watchlist import DynamicWatchlist
 from analysis.indicators import IndicatorEngine
@@ -86,6 +87,11 @@ def build_trading_stack(dry_run: bool = False) -> tuple[TradingOrchestrator, Bac
         session_overrides=session_overrides,
         database=db,
     )
+
+    # Real-time news WebSocket — starts immediately, broker merges stream into REST results
+    news_stream = NewsStream()
+    news_stream.start()
+    broker._news_stream = news_stream
 
     orchestrator.reset_daily_state()
     if dry_run:
