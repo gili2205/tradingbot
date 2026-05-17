@@ -23,8 +23,12 @@ else
 fi
 chown -R "$BOT_USER:$BOT_USER" "$INSTALL_DIR"
 
-echo "=== 4. Install Python deps ==="
-su - "$BOT_USER" -c "python3 -m pip install --user -q -r $INSTALL_DIR/requirements.txt"
+echo "=== 4. Create virtualenv and install Python deps ==="
+apt-get install -y -qq python3-venv python3-full
+python3 -m venv "$INSTALL_DIR/.venv"
+"$INSTALL_DIR/.venv/bin/pip" install -q --upgrade pip
+"$INSTALL_DIR/.venv/bin/pip" install -q -r "$INSTALL_DIR/requirements.txt"
+chown -R "$BOT_USER:$BOT_USER" "$INSTALL_DIR/.venv"
 
 echo "=== 5. Create .env (fill in values after this script) ==="
 ENV_FILE="$INSTALL_DIR/.env"

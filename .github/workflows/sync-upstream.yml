@@ -78,7 +78,7 @@ jobs:
             set -e
             cd /opt/trading_bot
             git pull origin main
-            python3 -m pip install --user -q -r requirements.txt
+            .venv/bin/pip install -q -r requirements.txt
             sudo systemctl restart trading-bot
             sleep 3
             sudo systemctl is-active trading-bot
