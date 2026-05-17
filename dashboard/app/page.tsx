@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [status, setStatus] = useState<BotStatus | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -39,21 +40,23 @@ export default function DashboardPage() {
         router.push('/login')
         return
       }
-      setUserEmail(user.email)
-
       const authorizedEmail = process.env.NEXT_PUBLIC_AUTHORIZED_EMAIL
       if (authorizedEmail && user.email !== authorizedEmail) {
         signOut(auth)
         router.push('/login?error=unauthorized')
+        return
       }
+      setUserEmail(user.email)
+      setAuthReady(true)
     })
     return unsubAuth
   }, [router])
 
   useEffect(() => {
+    if (!authReady) return
     const unsub = subscribeToBotStatus((s) => setStatus(s))
     return unsub
-  }, [])
+  }, [authReady])
 
   function fmtPnl(val: number): { display: string; cls: string } {
     const sign = val >= 0 ? '+' : ''
@@ -87,7 +90,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <BotStatusBar />
+      {authReady && <BotStatusBar />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
@@ -109,16 +112,18 @@ export default function DashboardPage() {
         />
       </div>
 
-      <PositionsTable />
+      {authReady && <PositionsTable />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
-          <DecisionsFeed limit={20} />
+      {authReady && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2">
+            <DecisionsFeed limit={20} />
+          </div>
+          <div>
+            <PnLChart />
+          </div>
         </div>
-        <div>
-          <PnLChart />
-        </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -123,20 +123,24 @@ export default function ConfigPage() {
   const [toast, setToast] = useState<ToastState | null>(null)
   const [newSymbol, setNewSymbol] = useState('')
 
+  const [authReady, setAuthReady] = useState(false)
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.push('/login')
+      if (!user) { router.push('/login'); return }
+      setAuthReady(true)
     })
     return unsub
   }, [router])
 
   useEffect(() => {
+    if (!authReady) return
     const unsub = subscribeToBotConfig((config) => {
       setForm(config)
       setLoading(false)
     })
     return unsub
-  }, [])
+  }, [authReady])
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type })

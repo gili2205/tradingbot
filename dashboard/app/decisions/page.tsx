@@ -54,20 +54,24 @@ export default function DecisionsPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today')
   const [loading, setLoading] = useState(true)
 
+  const [authReady, setAuthReady] = useState(false)
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.push('/login')
+      if (!user) { router.push('/login'); return }
+      setAuthReady(true)
     })
     return unsub
   }, [router])
 
   useEffect(() => {
+    if (!authReady) return
     const unsub = subscribeToDecisions(100, (d) => {
       setDecisions(d)
       setLoading(false)
     })
     return unsub
-  }, [])
+  }, [authReady])
 
   const filtered = useMemo(() => {
     let list = decisions
