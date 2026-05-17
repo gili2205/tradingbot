@@ -124,20 +124,21 @@ def main():
     )
 
     def send_heartbeat():
+        from core.firestore_sync import sync_status
         try:
-            from core.firestore_sync import sync_status
             positions = orchestrator.broker.get_positions()
-            mode = "dry_run" if orchestrator._dry_run else "live"
-            sync_status(
-                mode=mode,
-                deployed_today=orchestrator._deployed_today,
-                daily_pnl=orchestrator._daily_pnl,
-                trades_today=orchestrator._trades_today,
-                open_positions_count=len(positions),
-                session_date=orchestrator._session_date,
-            )
+            pos_count = len(positions)
         except Exception:
-            pass
+            pos_count = orchestrator._open_positions_count if hasattr(orchestrator, '_open_positions_count') else 0
+        mode = "dry_run" if orchestrator._dry_run else "live"
+        sync_status(
+            mode=mode,
+            deployed_today=orchestrator._deployed_today,
+            daily_pnl=orchestrator._daily_pnl,
+            trades_today=orchestrator._trades_today,
+            open_positions_count=pos_count,
+            session_date=orchestrator._session_date,
+        )
 
     scheduler.add_job(
         send_heartbeat,

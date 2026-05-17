@@ -1,8 +1,11 @@
 """Fire-and-forget Firestore sync. All writes run in daemon threads and never raise."""
 
+import logging
 import os
 import threading
 from datetime import datetime, timezone
+
+log = logging.getLogger(__name__)
 
 
 def _db():
@@ -19,8 +22,8 @@ def _safe(fn):
     def wrapper():
         try:
             fn()
-        except Exception:
-            pass  # non-fatal — SQLite is the source of truth
+        except Exception as e:
+            log.warning("Firestore write failed: %s", e)
     return wrapper
 
 
