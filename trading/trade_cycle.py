@@ -252,6 +252,9 @@ class TradeCycleMixin:
         try:
             from core.config_watcher import get_config_watcher
             watcher = get_config_watcher()
+            if watcher.consume_pause_activation():
+                log.warning("Bot PAUSED via dashboard — closing all open positions before halting")
+                self.eod_close_all()
             if watcher.is_paused():
                 log.info("Bot is PAUSED via dashboard — skipping scan cycle")
                 return

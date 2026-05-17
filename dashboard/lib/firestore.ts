@@ -86,7 +86,7 @@ export interface DailySummary {
 
 export const DEFAULT_CONFIG: BotConfig = {
   paused: false,
-  dry_run: false,
+  dry_run: true,
   max_risk_per_trade: 100.0,
   max_concurrent_positions: 4,
   max_daily_capital: 4000.0,

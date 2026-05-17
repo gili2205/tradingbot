@@ -155,7 +155,7 @@ def init_default_config(watchlist: list[str]):
             return
         ref.set({
             "paused":                  False,
-            "dry_run":                 False,
+            "dry_run":                 True,
             "max_risk_per_trade":      100.0,
             "max_concurrent_positions": 4,
             "max_daily_capital":       4000.0,

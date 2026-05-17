@@ -22,6 +22,8 @@ class ConfigWatcher:
     def __init__(self):
         self._cache: dict = {}
         self._rlock = threading.RLock()
+        self._prev_paused: bool = False
+        self._pause_just_activated: bool = False
         self._load()
         t = threading.Thread(target=self._loop, daemon=True, name="config-watcher")
         t.start()
@@ -34,8 +36,13 @@ class ConfigWatcher:
                 return
             doc = db.collection("config").document("bot").get()
             if doc.exists:
+                new_cache = doc.to_dict() or {}
                 with self._rlock:
-                    self._cache = doc.to_dict() or {}
+                    new_paused = bool(new_cache.get("paused", False))
+                    if new_paused and not self._prev_paused:
+                        self._pause_just_activated = True
+                    self._prev_paused = new_paused
+                    self._cache = new_cache
         except Exception:
             pass  # stale cache is acceptable
 
@@ -43,6 +50,14 @@ class ConfigWatcher:
         while True:
             time.sleep(self.POLL_INTERVAL)
             self._load()
+
+    def consume_pause_activation(self) -> bool:
+        """Returns True once when pause transitions False→True, then resets."""
+        with self._rlock:
+            if self._pause_just_activated:
+                self._pause_just_activated = False
+                return True
+            return False
 
     # ── Public accessors ──────────────────────────────────────────────────────
 
