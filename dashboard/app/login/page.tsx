@@ -26,13 +26,13 @@ function LoginContent() {
       if (user) {
         const authorized = process.env.NEXT_PUBLIC_AUTHORIZED_EMAIL
         if (!authorized || user.email === authorized) {
-          document.cookie = `session=${user.uid}; path=/; max-age=86400; samesite=strict`
-          router.push(fromPath)
+          document.cookie = `session=${user.uid}; path=/; max-age=86400; samesite=lax`
+          window.location.href = fromPath
         }
       }
     })
     return unsub
-  }, [router, fromPath])
+  }, [fromPath])
 
   async function handleGoogleSignIn() {
     setLoading(true)
@@ -48,8 +48,8 @@ function LoginContent() {
         return
       }
 
-      document.cookie = `session=${user.uid}; path=/; max-age=86400; samesite=strict`
-      router.push(fromPath)
+      document.cookie = `session=${user.uid}; path=/; max-age=86400; samesite=lax`
+      window.location.href = fromPath
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sign-in failed'
       if (!msg.includes('popup-closed-by-user')) {
