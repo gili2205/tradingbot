@@ -104,7 +104,7 @@ export function subscribeToBotConfig(callback: (config: BotConfig) => void): () 
   const ref = doc(db, 'config', 'bot')
   return onSnapshot(ref, (snap) => {
     if (snap.exists()) {
-      callback(snap.data() as BotConfig)
+      callback({ ...DEFAULT_CONFIG, ...snap.data() } as BotConfig)
     } else {
       callback(DEFAULT_CONFIG)
     }
