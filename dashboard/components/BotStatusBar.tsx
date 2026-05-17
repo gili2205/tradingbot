@@ -69,7 +69,7 @@ export default function BotStatusBar() {
           <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'live' ? 'animate-pulse' : ''}`} />
           {label}
         </span>
-        {status && (
+        {status?.mode && (
           <span className="text-[#94a3b8] text-sm">
             Mode:{' '}
             <span className="text-[#f1f5f9] font-medium capitalize">
