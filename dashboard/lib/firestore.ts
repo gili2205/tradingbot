@@ -3,7 +3,6 @@ import {
   collection,
   onSnapshot,
   setDoc,
-  updateDoc,
   query,
   orderBy,
   limit,
@@ -155,7 +154,7 @@ export function subscribeToDailySummaries(
 
 export async function updateBotConfig(updates: Partial<BotConfig>): Promise<void> {
   const ref = doc(db, 'config', 'bot')
-  await updateDoc(ref, { ...updates, updated_at: Timestamp.now() })
+  await setDoc(ref, { ...updates, updated_at: Timestamp.now() }, { merge: true })
 }
 
 export async function saveBotConfig(config: BotConfig): Promise<void> {
