@@ -111,7 +111,8 @@ def sync_daily_summary(date_str, trades, wins, losses, gross_pnl, net_pnl, notes
 
 def sync_status(mode="live", deployed_today=0.0, daily_pnl=0.0,
                 trades_today=0, open_positions_count=0, session_date=""):
-    def _write():
+    """Synchronous write — heartbeat must land reliably, not in a daemon thread."""
+    try:
         db = _db()
         if not db:
             return
@@ -126,8 +127,8 @@ def sync_status(mode="live", deployed_today=0.0, daily_pnl=0.0,
             "open_positions_count": open_positions_count,
             "session_date":         session_date,
         })
-
-    _run(_write)
+    except Exception as e:
+        log.warning("sync_status write failed: %s", e)
 
 
 def write_offline():
