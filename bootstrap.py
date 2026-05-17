@@ -99,4 +99,12 @@ def build_trading_stack(dry_run: bool = False) -> tuple[TradingOrchestrator, Bac
     if dry_run:
         orchestrator.set_dry_run(True)
 
+    try:
+        from core.firestore_sync import init_default_config
+        from core.config_watcher import get_config_watcher
+        init_default_config(config.WATCHLIST)
+        get_config_watcher()  # start polling thread early
+    except Exception:
+        pass
+
     return orchestrator, backtester

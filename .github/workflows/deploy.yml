@@ -1,0 +1,31 @@
+name: Deploy Bot to GCP VM
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "dashboard/**"
+      - "*.md"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_VM_IP }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/trading_bot
+            git pull origin main
+            python3 -m pip install --user -q -r requirements.txt
+            sudo systemctl restart trading-bot
+            echo "Deploy complete — bot restarted"
+            sleep 3
+            sudo systemctl is-active trading-bot

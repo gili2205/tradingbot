@@ -1,0 +1,136 @@
+name: Auto-sync from upstream
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 7 AM UTC daily (3 AM ET — before market open)
+  workflow_dispatch:        # also triggerable manually from GitHub Actions UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/andy-12-08/autonomous_trading_agent.git
+          git fetch upstream main --tags
+
+      - name: Check for new upstream commits
+        id: diff
+        run: |
+          COUNT=$(git log HEAD..upstream/main --oneline | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            echo "Found $COUNT new upstream commit(s):"
+            git log HEAD..upstream/main --oneline
+
+            # Capture up to 15 commits for the issue body
+            SUMMARY=$(git log HEAD..upstream/main --oneline | head -15)
+            echo "summary<<DELIM" >> "$GITHUB_OUTPUT"
+            echo "$SUMMARY"       >> "$GITHUB_OUTPUT"
+            echo "DELIM"          >> "$GITHUB_OUTPUT"
+          else
+            echo "Already up to date — nothing to do."
+          fi
+
+      - name: Attempt merge
+        if: steps.diff.outputs.count != '0'
+        id: merge
+        run: |
+          if git merge upstream/main --no-edit; then
+            echo "status=success" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Success path: push merged code then deploy to VM ─────────────────────
+
+      - name: Push merged code to GitHub
+        if: steps.diff.outputs.count != '0' && steps.merge.outputs.status == 'success'
+        run: |
+          git push origin main
+          echo "Pushed merged upstream commits to origin/main"
+
+      - name: Deploy to VM
+        if: steps.diff.outputs.count != '0' && steps.merge.outputs.status == 'success'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_VM_IP }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/trading_bot
+            git pull origin main
+            python3 -m pip install --user -q -r requirements.txt
+            sudo systemctl restart trading-bot
+            sleep 3
+            sudo systemctl is-active trading-bot
+            echo "Auto-update complete: $(git log -1 --oneline)"
+
+      # ── Failure path: open a GitHub issue (deduplicated) ─────────────────────
+
+      - name: Open issue on merge conflict
+        if: steps.diff.outputs.count != '0' && steps.merge.outputs.status == 'conflict'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'upstream-sync-conflict';
+
+            // Don't create a duplicate issue if one is already open
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: label,
+              state: 'open',
+            });
+            if (existing.data.length > 0) {
+              core.info(`Open conflict issue already exists (#${existing.data[0].number}) — skipping.`);
+              return;
+            }
+
+            const count   = '${{ steps.diff.outputs.count }}';
+            const summary = `${{ steps.diff.outputs.summary }}`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: `⚠️ Upstream update needs manual merge (${count} commit(s))`,
+              body: [
+                `The upstream repo [andy-12-08/autonomous_trading_agent](https://github.com/andy-12-08/autonomous_trading_agent) has **${count} new commit(s)** that could not be auto-merged due to conflicts.`,
+                '',
+                '**New upstream commits:**',
+                '```',
+                summary,
+                '```',
+                '',
+                '**To resolve manually:**',
+                '```bash',
+                'git fetch upstream',
+                'git merge upstream/main',
+                '# fix any conflicts in your editor',
+                'git add .',
+                'git commit',
+                'git push origin main',
+                '```',
+                '',
+                '_Close this issue once the merge is complete._',
+              ].join('\n'),
+              labels: [label],
+            });

@@ -25,6 +25,11 @@ def graceful_exit(sig, frame):
         Does not return; calls sys.exit(0).
     """
     log.info("Shutdown signal received — stopping bot")
+    try:
+        from core.firestore_sync import write_offline
+        write_offline()
+    except Exception:
+        pass
     sys.exit(0)
 
 
@@ -116,6 +121,31 @@ def main():
         minute=0,
         id="weekly_backtest",
         max_instances=1,
+    )
+
+    def send_heartbeat():
+        try:
+            from core.firestore_sync import sync_status
+            positions = orchestrator.broker.get_positions()
+            mode = "dry_run" if orchestrator._dry_run else "live"
+            sync_status(
+                mode=mode,
+                deployed_today=orchestrator._deployed_today,
+                daily_pnl=orchestrator._daily_pnl,
+                trades_today=orchestrator._trades_today,
+                open_positions_count=len(positions),
+                session_date=orchestrator._session_date,
+            )
+        except Exception:
+            pass
+
+    scheduler.add_job(
+        send_heartbeat,
+        "interval",
+        seconds=30,
+        id="heartbeat",
+        max_instances=1,
+        coalesce=True,
     )
 
     log.info("Scheduler started — position management every 2 min, scan every 10 min")

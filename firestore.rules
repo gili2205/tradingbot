@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Only the single authorized user can read or write anything
+    function isAuthorized() {
+      return request.auth != null
+        && request.auth.token.email == "YOUR_EMAIL_HERE";
+    }
+
+    match /{document=**} {
+      allow read, write: if isAuthorized();
+    }
+  }
+}

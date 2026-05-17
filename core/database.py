@@ -160,6 +160,13 @@ class Database:
                  stop_loss or 0, take_profit or 0,
                  f"{pnl:.2f}" if pnl is not None else "n/a",
                  reasoning[:120])
+        try:
+            from core.firestore_sync import sync_decision
+            sync_decision(symbol, action, price=price, qty=qty, stop_loss=stop_loss,
+                          take_profit=take_profit, pnl=pnl, reasoning=reasoning,
+                          setup_type=setup_type, confidence=confidence, signal_score=signal_score)
+        except Exception:
+            pass
 
     def update_outcome(self, symbol: str, outcome: str, outcome_pnl: float) -> None:
         """Link the most recent unlinked BUY for this symbol to its trade outcome.
@@ -226,6 +233,12 @@ class Database:
         )
         conn.commit()
         conn.close()
+        try:
+            from core.firestore_sync import sync_position
+            sync_position(symbol, entry_price, qty, stop_loss, take_profit,
+                          entry_ts=entry_ts, setup_type=setup_type)
+        except Exception:
+            pass
 
     def remove_position(self, symbol) -> None:
         """Delete a position record from the positions table.
@@ -240,6 +253,11 @@ class Database:
         conn.execute("DELETE FROM positions WHERE symbol=?", (symbol,))
         conn.commit()
         conn.close()
+        try:
+            from core.firestore_sync import remove_position as fs_remove
+            fs_remove(symbol)
+        except Exception:
+            pass
 
     def get_open_positions_db(self) -> list[dict]:
         """Return every row from the positions table as plain dicts.
@@ -295,3 +313,8 @@ class Database:
         )
         conn.commit()
         conn.close()
+        try:
+            from core.firestore_sync import sync_daily_summary
+            sync_daily_summary(date_str, trades, wins, losses, gross_pnl, net_pnl, notes)
+        except Exception:
+            pass
