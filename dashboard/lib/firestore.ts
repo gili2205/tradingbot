@@ -106,6 +106,8 @@ export function subscribeToBotConfig(callback: (config: BotConfig) => void): () 
   return onSnapshot(ref, (snap) => {
     if (snap.exists()) {
       callback(snap.data() as BotConfig)
+    } else {
+      callback(DEFAULT_CONFIG)
     }
   })
 }
