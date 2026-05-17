@@ -5,7 +5,7 @@ service cloud.firestore {
     // Only the single authorized user can read or write anything
     function isAuthorized() {
       return request.auth != null
-        && request.auth.token.email == "YOUR_EMAIL_HERE";
+        && request.auth.token.email == "gilih2205@gmail.com";
     }
 
     match /{document=**} {
