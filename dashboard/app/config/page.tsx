@@ -16,41 +16,6 @@ interface ToastState {
   type: 'success' | 'error'
 }
 
-function Toggle({
-  label,
-  checked,
-  onChange,
-  description,
-}: {
-  label: string
-  checked: boolean
-  onChange: (val: boolean) => void
-  description?: string
-}) {
-  return (
-    <div className="flex items-center justify-between py-3">
-      <div>
-        <p className="text-[#f1f5f9] text-sm font-medium">{label}</p>
-        {description && <p className="text-[#94a3b8] text-xs mt-0.5">{description}</p>}
-      </div>
-      <button
-        type="button"
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-          checked ? 'bg-[#3b82f6]' : 'bg-[#334155]'
-        }`}
-        role="switch"
-        aria-checked={checked}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
-    </div>
-  )
-}
 
 function NumberInput({
   label,
@@ -224,23 +189,6 @@ export default function ConfigPage() {
           {toast.message}
         </div>
       )}
-
-      <SectionCard title="Bot Controls">
-        <div className="divide-y divide-[#334155]">
-          <Toggle
-            label="Paused"
-            checked={form.paused}
-            onChange={(val) => set('paused', val)}
-            description="When enabled, the bot will not enter new trades"
-          />
-          <Toggle
-            label="Dry Run"
-            checked={form.dry_run}
-            onChange={(val) => set('dry_run', val)}
-            description="Paper trading mode — no real orders are placed"
-          />
-        </div>
-      </SectionCard>
 
       <SectionCard title="Risk Parameters">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
