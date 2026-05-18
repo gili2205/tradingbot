@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BotConfig, subscribeToBotConfig, togglePaused, toggleDryRun } from '@/lib/firestore'
+import { BotConfig, subscribeToBotConfig, togglePaused, toggleDryRun, forceScan } from '@/lib/firestore'
 
 export default function ControlButtons() {
   const [config, setConfig] = useState<BotConfig | null>(null)
   const [loadingPause, setLoadingPause] = useState(false)
   const [loadingDryRun, setLoadingDryRun] = useState(false)
+  const [loadingForceScan, setLoadingForceScan] = useState(false)
+  const [forceScanSent, setForceScanSent] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeToBotConfig((c) => setConfig(c))
@@ -43,6 +45,19 @@ export default function ControlButtons() {
     }
   }
 
+  async function handleForceScan() {
+    setLoadingForceScan(true)
+    try {
+      await forceScan()
+      setForceScanSent(true)
+      setTimeout(() => setForceScanSent(false), 4000)
+    } catch (err) {
+      console.error('Failed to force scan:', err)
+    } finally {
+      setLoadingForceScan(false)
+    }
+  }
+
   return (
     <div className="flex items-center gap-3">
       <button
@@ -61,6 +76,14 @@ export default function ControlButtons() {
           : config?.paused
           ? 'Resume Bot'
           : 'Pause Bot'}
+      </button>
+
+      <button
+        onClick={handleForceScan}
+        disabled={loadingForceScan || forceScanSent}
+        className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[#334155] hover:bg-[#475569] text-[#f1f5f9]"
+      >
+        {loadingForceScan ? 'Sending...' : forceScanSent ? 'Scan Queued ✓' : 'Force Scan'}
       </button>
 
       <button

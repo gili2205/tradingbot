@@ -59,6 +59,22 @@ class ConfigWatcher:
                 return True
             return False
 
+    def consume_force_scan(self) -> bool:
+        """Returns True once if force_scan flag is set in Firestore, then clears it."""
+        if not self.get("force_scan"):
+            return False
+        try:
+            from core.firestore_client import get_db
+            db = get_db()
+            if db:
+                db.collection("config").document("bot").update({"force_scan": False})
+        except Exception:
+            pass
+        with self._rlock:
+            if isinstance(self._cache, dict):
+                self._cache["force_scan"] = False
+        return True
+
     # ── Public accessors ──────────────────────────────────────────────────────
 
     def get(self, key, default=None):

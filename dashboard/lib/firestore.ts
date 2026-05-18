@@ -169,3 +169,8 @@ export async function togglePaused(currentPaused: boolean): Promise<void> {
 export async function toggleDryRun(currentDryRun: boolean): Promise<void> {
   await updateBotConfig({ dry_run: !currentDryRun })
 }
+
+export async function forceScan(): Promise<void> {
+  const ref = doc(db, 'config', 'bot')
+  await setDoc(ref, { force_scan: true }, { merge: true })
+}

@@ -152,9 +152,25 @@ def main():
     log.info("Scheduler started — position management every 2 min, scan every 10 min")
     scheduler.start()
 
+    _force_scan_tick = 0
     try:
         while True:
             time.sleep(1)
+            _force_scan_tick += 1
+            if _force_scan_tick >= 5:
+                _force_scan_tick = 0
+                try:
+                    from core.config_watcher import get_config_watcher
+                    if get_config_watcher().consume_force_scan():
+                        log.info("Force scan requested from dashboard — triggering immediate scan")
+                        from datetime import datetime as _dt
+                        scheduler.reschedule_job(
+                            "scan_and_trade",
+                            trigger="date",
+                            run_date=_dt.now(config.ET),
+                        )
+                except Exception:
+                    pass
     except (KeyboardInterrupt, SystemExit):
         log.info("Bot stopped by user")
     finally:
