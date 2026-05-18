@@ -2,12 +2,15 @@
 Description=Autonomous Stock Trading Bot
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
 User=trading
 WorkingDirectory=/opt/trading_bot
 EnvironmentFile=/opt/trading_bot/.env
+ExecStartPre=/bin/sleep 5
 ExecStart=/opt/trading_bot/.venv/bin/python3 /opt/trading_bot/main.py
 Restart=on-failure
 RestartSec=15

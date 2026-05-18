@@ -1,8 +1,11 @@
 """Firebase Admin SDK singleton — lazy-initialized, never raises on import."""
 
 import json
+import logging
 import os
 import threading
+
+log = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _db = None
@@ -27,6 +30,7 @@ def _init():
 
         sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
         if not sa_json:
+            log.warning("FIREBASE_SERVICE_ACCOUNT not set — Firestore disabled")
             return None
 
         sa_dict = json.loads(sa_json)
