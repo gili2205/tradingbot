@@ -264,6 +264,20 @@ class TradeCycleMixin:
             elif not watcher.is_dry_run() and self._dry_run:
                 log.info("Dry-run disabled via dashboard — resuming live paper trading")
                 self._dry_run = False
+
+            # Apply Firestore overrides to config module so all downstream code
+            # (risk manager, executor, screener) picks up the live dashboard values.
+            config.MAX_RISK_PER_TRADE       = watcher.override("max_risk_per_trade",       config.MAX_RISK_PER_TRADE)
+            config.MAX_CONCURRENT_POSITIONS = watcher.override("max_concurrent_positions",  config.MAX_CONCURRENT_POSITIONS)
+            config.MAX_DAILY_CAPITAL        = watcher.override("max_daily_capital",         config.MAX_DAILY_CAPITAL)
+            config.ACCOUNT_SIZE             = watcher.override("account_size",              config.ACCOUNT_SIZE)
+            config.DAILY_DRAWDOWN_LIMIT     = watcher.override("daily_drawdown_limit",      config.DAILY_DRAWDOWN_LIMIT)
+            config.MIN_SIGNAL_CONFIDENCE    = watcher.override("min_signal_confidence",     config.MIN_SIGNAL_CONFIDENCE)
+            config.MIN_REWARD_TO_RISK       = watcher.override("min_reward_to_risk",        config.MIN_REWARD_TO_RISK)
+            config.MAX_SPREAD_PCT           = watcher.override("max_spread_pct",            config.MAX_SPREAD_PCT)
+            watchlist_override = watcher.watchlist_override()
+            if watchlist_override:
+                config.WATCHLIST = watchlist_override
         except Exception:
             pass
 
