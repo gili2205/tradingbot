@@ -33,13 +33,21 @@ def _init():
             log.warning("FIREBASE_SERVICE_ACCOUNT not set — Firestore disabled")
             return None
 
+        log.info("firestore_client: parsing service account JSON (len=%d)", len(sa_json))
         sa_dict = json.loads(sa_json)
 
         if firebase_admin._DEFAULT_APP_NAME not in firebase_admin._apps:
+            log.info("firestore_client: initializing firebase_admin app")
             cred = credentials.Certificate(sa_dict)
             firebase_admin.initialize_app(cred)
+            log.info("firestore_client: firebase_admin app initialized")
+        else:
+            log.info("firestore_client: firebase_admin app already initialized")
 
-        return firestore.client()
+        log.info("firestore_client: creating Firestore client")
+        client = firestore.client()
+        log.info("firestore_client: Firestore client ready")
+        return client
     except Exception as e:
-        print(f"[firestore_client] init failed (Firestore sync disabled): {e}")
+        log.error("firestore_client: init failed — %s", e, exc_info=True)
         return None
