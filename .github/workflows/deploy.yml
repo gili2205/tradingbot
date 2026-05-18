@@ -25,6 +25,7 @@ jobs:
             cd /opt/trading_bot
             git pull origin main
             .venv/bin/pip install -q -r requirements.txt
+            sudo systemctl daemon-reload
             sudo systemctl restart trading-bot
             echo "Deploy complete — bot restarted"
             sleep 3
