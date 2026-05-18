@@ -209,18 +209,21 @@ class TradeCycleMixin:
                 continue
 
             # 15-min alignment gate — momentum and gap_and_go setups require the
-            # 15-min timeframe to be fully bullish (EMA + VWAP + MACD all positive).
-            # Mean-reversion and vwap_reclaim setups are exempt: they work precisely
-            # because price is NOT yet aligned on the higher timeframe.
+            # 15-min timeframe to be mostly bullish (EMA + VWAP + MACD).
+            # Mean-reversion and vwap_reclaim setups are exempt.
+            # High-conviction signals (score >= 8.5) only need 2/3 — one lagging
+            # indicator shouldn't block a near-perfect setup.
             setup_hint = item.get("setup_type_hint", "momentum")
             if setup_hint in ("momentum", "gap_and_go"):
-                b15    = item.get("bias_15min") or {}
-                bull15 = sum([bool(b15.get("ema_bull")),
-                              bool(b15.get("above_vwap")),
-                              bool(b15.get("macd_bull"))])
-                if bull15 < 3:
+                b15       = item.get("bias_15min") or {}
+                bull15    = sum([bool(b15.get("ema_bull")),
+                                 bool(b15.get("above_vwap")),
+                                 bool(b15.get("macd_bull"))])
+                sig_score = item.get("signal_score", 0)
+                required  = 2 if sig_score >= 8.5 else 3
+                if bull15 < required:
                     pre_vetoed.append((sym,
-                        f"15min gate: {bull15}/3 bullish — momentum entries require full 15-min alignment"))
+                        f"15min gate: {bull15}/{required} bullish (score={sig_score:.1f})"))
                     continue
 
             pre_passed.append(item)
