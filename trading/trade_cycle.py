@@ -267,17 +267,29 @@ class TradeCycleMixin:
 
             # Apply Firestore overrides to config module so all downstream code
             # (risk manager, executor, screener) picks up the live dashboard values.
-            config.MAX_RISK_PER_TRADE       = watcher.override("max_risk_per_trade",       config.MAX_RISK_PER_TRADE)
-            config.MAX_CONCURRENT_POSITIONS = watcher.override("max_concurrent_positions",  config.MAX_CONCURRENT_POSITIONS)
-            config.MAX_DAILY_CAPITAL        = watcher.override("max_daily_capital",         config.MAX_DAILY_CAPITAL)
-            config.ACCOUNT_SIZE             = watcher.override("account_size",              config.ACCOUNT_SIZE)
-            config.DAILY_DRAWDOWN_LIMIT     = watcher.override("daily_drawdown_limit",      config.DAILY_DRAWDOWN_LIMIT)
-            config.MIN_SIGNAL_CONFIDENCE    = watcher.override("min_signal_confidence",     config.MIN_SIGNAL_CONFIDENCE)
-            config.MIN_REWARD_TO_RISK       = watcher.override("min_reward_to_risk",        config.MIN_REWARD_TO_RISK)
-            config.MAX_SPREAD_PCT           = watcher.override("max_spread_pct",            config.MAX_SPREAD_PCT)
+            _OVERRIDES = [
+                ("max_risk_per_trade",       "MAX_RISK_PER_TRADE",       "${}"),
+                ("max_concurrent_positions", "MAX_CONCURRENT_POSITIONS", "{}"),
+                ("max_daily_capital",        "MAX_DAILY_CAPITAL",        "${}"),
+                ("account_size",             "ACCOUNT_SIZE",             "${}"),
+                ("daily_drawdown_limit",     "DAILY_DRAWDOWN_LIMIT",     "${}"),
+                ("min_signal_confidence",    "MIN_SIGNAL_CONFIDENCE",    "{}"),
+                ("min_reward_to_risk",       "MIN_REWARD_TO_RISK",       "{}R"),
+                ("max_spread_pct",           "MAX_SPREAD_PCT",           "{}"),
+            ]
+            _changes = []
+            for fs_key, cfg_attr, fmt in _OVERRIDES:
+                old = getattr(config, cfg_attr)
+                new = watcher.override(fs_key, old)
+                if new != old:
+                    _changes.append(f"{fs_key}: {fmt.format(old)} → {fmt.format(new)}")
+                    setattr(config, cfg_attr, new)
             watchlist_override = watcher.watchlist_override()
-            if watchlist_override:
+            if watchlist_override and set(watchlist_override) != set(config.WATCHLIST):
+                _changes.append(f"watchlist: {len(config.WATCHLIST)} symbols → {len(watchlist_override)} symbols")
                 config.WATCHLIST = watchlist_override
+            if _changes:
+                log.info("CONFIG UPDATE from dashboard: %s", " | ".join(_changes))
         except Exception:
             pass
 
