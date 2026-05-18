@@ -296,11 +296,17 @@ class MarketDataMixin:
         if not symbols:
             return {}
 
-        BATCH  = 500
+        BATCH         = 200
+        _SNAP_TIMEOUT = 15
+        _WALL_CAP     = 90   # stop after 90s total regardless of batches remaining
         result: dict[str, dict] = {}
+        _wall_start = time.time()
 
-        _SNAP_TIMEOUT = 30
         for i in range(0, len(symbols), BATCH):
+            if time.time() - _wall_start > _WALL_CAP:
+                log.warning("Snapshot screen wall-clock cap (%ds) reached after %d symbols — stopping early",
+                            _WALL_CAP, i)
+                break
             batch = symbols[i : i + BATCH]
             req   = StockSnapshotRequest(symbol_or_symbols=batch, feed="iex")
             _pool = _cf.ThreadPoolExecutor(max_workers=1)

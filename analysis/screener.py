@@ -187,6 +187,16 @@ class Screener:
             log.warning("Snapshot screen: asset list empty — skipping")
             return []
 
+        # Cap at 3,000 symbols with a shuffle so we don't always scan the same
+        # alphabetical slice.  We only need top-300 candidates, so 3K gives a
+        # representative cross-section of the market without burning 10+ minutes
+        # on IEX snapshot calls for all ~12,000 NYSE/NASDAQ tickers.
+        _MAX_SYMBOLS = 3000
+        if len(all_symbols) > _MAX_SYMBOLS:
+            import random as _random
+            _random.shuffle(all_symbols)
+            all_symbols = all_symbols[:_MAX_SYMBOLS]
+
         log.info("Snapshot screen: fetching snapshots for %d symbols in batches…",
                  len(all_symbols))
         t0        = datetime.now()
