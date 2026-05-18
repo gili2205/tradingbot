@@ -116,58 +116,31 @@ export default function DecisionsPage() {
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-[#f1f5f9]">Trade Log</h1>
 
-      <div className="bg-[#1e293b] border border-[#334155] rounded-lg p-4">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="bg-[#1e293b] border border-[#334155] rounded-lg p-4 space-y-3">
+        <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <span className="text-[#94a3b8] text-xs uppercase tracking-wide">Action</span>
             <div className="flex gap-1">
               {(['ALL', 'BUY', 'SELL'] as ActionFilter[]).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setActionFilter(f)}
-                  className={filterBtnClass(actionFilter === f)}
-                >
-                  {f}
-                </button>
+                <button key={f} onClick={() => setActionFilter(f)} className={filterBtnClass(actionFilter === f)}>{f}</button>
               ))}
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             <span className="text-[#94a3b8] text-xs uppercase tracking-wide">Date</span>
             <div className="flex gap-1">
-              <button
-                onClick={() => setDateFilter('today')}
-                className={filterBtnClass(dateFilter === 'today')}
-              >
-                Today
-              </button>
-              <button
-                onClick={() => setDateFilter('7days')}
-                className={filterBtnClass(dateFilter === '7days')}
-              >
-                Last 7 Days
-              </button>
-              <button
-                onClick={() => setDateFilter('all')}
-                className={filterBtnClass(dateFilter === 'all')}
-              >
-                All
-              </button>
+              <button onClick={() => setDateFilter('today')} className={filterBtnClass(dateFilter === 'today')}>Today</button>
+              <button onClick={() => setDateFilter('7days')} className={filterBtnClass(dateFilter === '7days')}>7 Days</button>
+              <button onClick={() => setDateFilter('all')} className={filterBtnClass(dateFilter === 'all')}>All</button>
             </div>
           </div>
-
-          <div className="ml-auto flex items-center gap-4 text-sm">
-            <span className="text-[#94a3b8]">
-              {filtered.length} trade{filtered.length !== 1 ? 's' : ''}
-            </span>
-            <span>
-              <span className="text-[#94a3b8]">Realized P&L: </span>
-              <span className={`font-mono font-semibold ${pnlColor}`}>
-                {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
-              </span>
-            </span>
-          </div>
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-[#94a3b8] text-xs">{filtered.length} trade{filtered.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs">
+            <span className="text-[#94a3b8]">P&L: </span>
+            <span className={`font-mono font-semibold ${pnlColor}`}>{totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}</span>
+          </span>
         </div>
       </div>
 
@@ -175,69 +148,88 @@ export default function DecisionsPage() {
         {loading ? (
           <div className="py-12 text-center text-[#94a3b8] text-sm">Loading decisions...</div>
         ) : filtered.length === 0 ? (
-          <div className="py-12 text-center text-[#94a3b8] text-sm">
-            No decisions match current filters
-          </div>
+          <div className="py-12 text-center text-[#94a3b8] text-sm">No decisions match current filters</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#334155] text-[#94a3b8] text-xs uppercase tracking-wide">
-                  <th className="px-4 py-3 text-left whitespace-nowrap">Date / Time</th>
-                  <th className="px-4 py-3 text-left">Symbol</th>
-                  <th className="px-4 py-3 text-left">Action</th>
-                  <th className="px-4 py-3 text-right">Price</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3 text-right">Conf</th>
-                  <th className="px-4 py-3 text-right">Score</th>
-                  <th className="px-4 py-3 text-left">Setup</th>
-                  <th className="px-4 py-3 text-right">P&L</th>
-                  <th className="px-4 py-3 text-left">Reasoning</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#334155]">
-                {filtered.map((d) => {
-                  const hasPnl = d.pnl !== null && d.pnl !== undefined
-                  const pnlColor = hasPnl && d.pnl! >= 0 ? 'text-green-400' : 'text-red-400'
+          <>
+            {/* Mobile card view */}
+            <div className="sm:hidden divide-y divide-[#334155]">
+              {filtered.map((d) => {
+                const hasPnl = d.pnl !== null && d.pnl !== undefined
+                const pnlColor = hasPnl && d.pnl! >= 0 ? 'text-green-400' : 'text-red-400'
+                return (
+                  <div key={d.id} className="px-4 py-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-[#f1f5f9]">{d.symbol}</span>
+                        {actionBadge(d.action)}
+                        {d.setup_type && (
+                          <span className="px-1.5 py-0.5 bg-[#334155] rounded text-xs text-[#94a3b8]">{d.setup_type}</span>
+                        )}
+                      </div>
+                      <span className={`font-mono text-sm font-semibold ${hasPnl ? pnlColor : 'text-[#475569]'}`}>
+                        {hasPnl ? `${d.pnl! >= 0 ? '+' : ''}$${d.pnl!.toFixed(2)}` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[#94a3b8]">
+                      <span className="font-mono">{formatDateTime(d.ts)}</span>
+                      <span>${d.price.toFixed(2)} ×{d.qty}</span>
+                      <span>conf {d.confidence}/10</span>
+                      {d.signal_score && <span>score {d.signal_score}</span>}
+                    </div>
+                    {d.reasoning && (
+                      <p className="text-xs text-[#64748b] line-clamp-2">{d.reasoning}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
-                  return (
-                    <tr key={d.id} className="hover:bg-[#334155]/40 transition-colors">
-                      <td className="px-4 py-3 text-[#94a3b8] font-mono text-xs whitespace-nowrap">
-                        {formatDateTime(d.ts)}
-                      </td>
-                      <td className="px-4 py-3 font-mono font-semibold text-[#f1f5f9]">
-                        {d.symbol}
-                      </td>
-                      <td className="px-4 py-3">{actionBadge(d.action)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">
-                        ${d.price.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-[#f1f5f9]">{d.qty}</td>
-                      <td className="px-4 py-3 text-right text-[#94a3b8]">{d.confidence}/10</td>
-                      <td className="px-4 py-3 text-right text-[#94a3b8]">{d.signal_score}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-block px-2 py-0.5 bg-[#334155] rounded text-xs text-[#94a3b8]">
-                          {d.setup_type}
-                        </span>
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-mono font-semibold ${
-                          hasPnl ? pnlColor : 'text-[#475569]'
-                        }`}
-                      >
-                        {hasPnl
-                          ? `${d.pnl! >= 0 ? '+' : ''}$${d.pnl!.toFixed(2)}`
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[#94a3b8] max-w-xs">
-                        <span className="line-clamp-2 text-xs">{d.reasoning}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+            {/* Desktop table view */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#334155] text-[#94a3b8] text-xs uppercase tracking-wide">
+                    <th className="px-4 py-3 text-left whitespace-nowrap">Date / Time</th>
+                    <th className="px-4 py-3 text-left">Symbol</th>
+                    <th className="px-4 py-3 text-left">Action</th>
+                    <th className="px-4 py-3 text-right">Price</th>
+                    <th className="px-4 py-3 text-right">Qty</th>
+                    <th className="px-4 py-3 text-right">Conf</th>
+                    <th className="px-4 py-3 text-right">Score</th>
+                    <th className="px-4 py-3 text-left">Setup</th>
+                    <th className="px-4 py-3 text-right">P&L</th>
+                    <th className="px-4 py-3 text-left">Reasoning</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#334155]">
+                  {filtered.map((d) => {
+                    const hasPnl = d.pnl !== null && d.pnl !== undefined
+                    const pnlColor = hasPnl && d.pnl! >= 0 ? 'text-green-400' : 'text-red-400'
+                    return (
+                      <tr key={d.id} className="hover:bg-[#334155]/40 transition-colors">
+                        <td className="px-4 py-3 text-[#94a3b8] font-mono text-xs whitespace-nowrap">{formatDateTime(d.ts)}</td>
+                        <td className="px-4 py-3 font-mono font-semibold text-[#f1f5f9]">{d.symbol}</td>
+                        <td className="px-4 py-3">{actionBadge(d.action)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">${d.price.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-[#f1f5f9]">{d.qty}</td>
+                        <td className="px-4 py-3 text-right text-[#94a3b8]">{d.confidence}/10</td>
+                        <td className="px-4 py-3 text-right text-[#94a3b8]">{d.signal_score}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-block px-2 py-0.5 bg-[#334155] rounded text-xs text-[#94a3b8]">{d.setup_type}</span>
+                        </td>
+                        <td className={`px-4 py-3 text-right font-mono font-semibold ${hasPnl ? pnlColor : 'text-[#475569]'}`}>
+                          {hasPnl ? `${d.pnl! >= 0 ? '+' : ''}$${d.pnl!.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-[#94a3b8] max-w-xs">
+                          <span className="line-clamp-2 text-xs">{d.reasoning}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

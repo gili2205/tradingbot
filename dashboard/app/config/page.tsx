@@ -159,21 +159,21 @@ export default function ConfigPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-bold text-[#f1f5f9]">Bot Configuration</h1>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             onClick={handleReset}
-            className="px-4 py-2 text-sm font-medium text-[#94a3b8] hover:text-[#f1f5f9] bg-[#1e293b] border border-[#334155] rounded-lg transition-colors hover:bg-[#334155]"
+            className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-[#94a3b8] hover:text-[#f1f5f9] bg-[#1e293b] border border-[#334155] rounded-lg transition-colors hover:bg-[#334155]"
           >
-            Reset to Defaults
+            Reset
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 text-sm font-semibold text-white bg-[#3b82f6] hover:bg-[#2563eb] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 sm:flex-none px-4 py-2 text-sm font-semibold text-white bg-[#3b82f6] hover:bg-[#2563eb] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? 'Saving...' : 'Save All Changes'}
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
