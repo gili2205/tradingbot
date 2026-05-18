@@ -28,23 +28,29 @@ def _init():
         import firebase_admin
         from firebase_admin import credentials, firestore
 
-        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
-        if not sa_json:
-            log.warning("FIREBASE_SERVICE_ACCOUNT not set — Firestore disabled")
-            return None
+        cred = None
 
-        log.info("firestore_client: parsing service account JSON (len=%d)", len(sa_json))
-        sa_dict = json.loads(sa_json)
+        # Preferred: file path avoids env-var mangling of PEM newlines
+        cred_file = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if cred_file and os.path.exists(cred_file):
+            log.info("firestore_client: loading credentials from file %s", cred_file)
+            cred = credentials.Certificate(cred_file)
+
+        # Fallback: inline JSON string
+        if cred is None:
+            sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT")
+            if not sa_json:
+                log.warning("Neither GOOGLE_APPLICATION_CREDENTIALS nor FIREBASE_SERVICE_ACCOUNT set")
+                return None
+            log.info("firestore_client: loading credentials from FIREBASE_SERVICE_ACCOUNT env var")
+            cred = credentials.Certificate(json.loads(sa_json))
 
         if firebase_admin._DEFAULT_APP_NAME not in firebase_admin._apps:
-            log.info("firestore_client: initializing firebase_admin app")
-            cred = credentials.Certificate(sa_dict)
             firebase_admin.initialize_app(cred)
-            log.info("firestore_client: firebase_admin app initialized")
+            log.info("firestore_client: firebase_admin initialized")
         else:
-            log.info("firestore_client: firebase_admin app already initialized")
+            log.info("firestore_client: firebase_admin already initialized")
 
-        log.info("firestore_client: creating Firestore client")
         client = firestore.client()
         log.info("firestore_client: Firestore client ready")
         return client
