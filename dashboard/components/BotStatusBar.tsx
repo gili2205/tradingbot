@@ -61,42 +61,57 @@ export default function BotStatusBar() {
   const offline = !status || isOffline(status.last_heartbeat)
 
   return (
-    <div className="flex items-center justify-between bg-[#1e293b] border border-[#334155] rounded-lg px-5 py-3">
-      <div className="flex items-center gap-4">
+    <div className="bg-[#1e293b] border border-[#334155] rounded-lg px-4 py-3">
+      {/* Mobile layout */}
+      <div className="flex items-center justify-between sm:hidden">
         <span
           className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${pillColor}`}
         >
           <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'live' ? 'animate-pulse' : ''}`} />
           {label}
         </span>
-        {status?.mode && (
-          <span className="text-[#94a3b8] text-sm">
-            Mode:{' '}
-            <span className="text-[#f1f5f9] font-medium capitalize">
-              {status.mode.replace('_', ' ')}
-            </span>
-          </span>
-        )}
+        <span className={`text-xs font-medium font-mono ${offline ? 'text-red-400' : 'text-[#94a3b8]'}`}>
+          {formatHeartbeat(status?.last_heartbeat ?? null)}
+        </span>
       </div>
 
-      <div className="flex items-center gap-6 text-sm text-[#94a3b8]">
-        {status?.session_date && (
+      {/* Desktop layout */}
+      <div className="hidden sm:flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <span
+            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${pillColor}`}
+          >
+            <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'live' ? 'animate-pulse' : ''}`} />
+            {label}
+          </span>
+          {status?.mode && (
+            <span className="text-[#94a3b8] text-sm">
+              Mode:{' '}
+              <span className="text-[#f1f5f9] font-medium capitalize">
+                {status.mode.replace('_', ' ')}
+              </span>
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-6 text-sm text-[#94a3b8]">
+          {status?.session_date && (
+            <span>
+              Session:{' '}
+              <span className="text-[#f1f5f9] font-medium">{status.session_date}</span>
+            </span>
+          )}
           <span>
-            Session:{' '}
-            <span className="text-[#f1f5f9] font-medium">{status.session_date}</span>
+            Last Heartbeat:{' '}
+            <span className={`font-medium ${offline ? 'text-red-400' : 'text-[#f1f5f9]'}`}>
+              {formatHeartbeat(status?.last_heartbeat ?? null)}
+            </span>
           </span>
-        )}
-        <span>
-          Last Heartbeat:{' '}
-          <span className={`font-medium ${offline ? 'text-red-400' : 'text-[#f1f5f9]'}`}>
-            {formatHeartbeat(status?.last_heartbeat ?? null)}
-          </span>
-        </span>
-        {status?.pid && (
-          <span>
-            PID: <span className="text-[#f1f5f9] font-mono">{status.pid}</span>
-          </span>
-        )}
+          {status?.pid && (
+            <span>
+              PID: <span className="text-[#f1f5f9] font-mono">{status.pid}</span>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

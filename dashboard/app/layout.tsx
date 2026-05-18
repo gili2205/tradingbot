@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Link from 'next/link'
@@ -10,6 +10,12 @@ export const metadata: Metadata = {
   description: 'Autonomous stock trading bot control panel',
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
@@ -18,32 +24,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-[#3b82f6] font-bold text-lg tracking-tight">TradingBot</span>
-              <span className="text-[#334155] text-lg font-light">|</span>
-              <span className="text-[#94a3b8] text-sm">Dashboard</span>
+              <span className="hidden sm:inline text-[#334155] text-lg font-light">|</span>
+              <span className="hidden sm:inline text-[#94a3b8] text-sm">Dashboard</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <Link
                 href="/"
-                className="px-3 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
+                className="px-2.5 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
               >
                 Overview
               </Link>
               <Link
                 href="/config"
-                className="px-3 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
+                className="px-2.5 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
               >
                 Config
               </Link>
               <Link
                 href="/decisions"
-                className="px-3 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
+                className="px-2.5 py-1.5 rounded text-sm text-[#94a3b8] hover:text-[#f1f5f9] hover:bg-[#1e293b] transition-colors"
               >
-                Trade Log
+                <span className="sm:hidden">Log</span>
+                <span className="hidden sm:inline">Trade Log</span>
               </Link>
             </div>
           </div>
         </nav>
-        <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+        <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">{children}</main>
       </body>
     </html>
   )

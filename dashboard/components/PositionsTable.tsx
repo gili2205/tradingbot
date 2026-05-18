@@ -44,7 +44,37 @@ export default function PositionsTable() {
           <span className="text-[#94a3b8] font-normal text-sm">({positions.length})</span>
         </h2>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile card view */}
+      <div className="sm:hidden divide-y divide-[#334155]">
+        {positions.map((pos) => {
+          const pnlPositive = pos.unrealized_pnl >= 0
+          const pnlColor = pnlPositive ? 'text-green-400' : 'text-red-400'
+          const pctColor = (pos.current_price - pos.entry_price) >= 0 ? 'text-green-400' : 'text-red-400'
+          return (
+            <div key={pos.id} className="px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-[#f1f5f9] text-base">{pos.symbol}</span>
+                <span className={`font-mono font-semibold text-sm ${pnlColor}`}>
+                  {fmtUSD(pos.unrealized_pnl)}{' '}
+                  <span className={`text-xs ${pctColor}`}>({fmtPct(pos.entry_price, pos.current_price)})</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 text-xs">
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Entry</p><p className="font-mono text-[#f1f5f9]">${fmt(pos.entry_price)}</p></div>
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Current</p><p className="font-mono text-[#f1f5f9]">${fmt(pos.current_price)}</p></div>
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Qty</p><p className="text-[#f1f5f9]">{pos.qty}</p></div>
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Stop</p><p className="font-mono text-red-400">${fmt(pos.stop_loss)}</p></div>
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Target</p><p className="font-mono text-green-400">${fmt(pos.take_profit)}</p></div>
+                <div><p className="text-[#64748b] uppercase tracking-wide mb-0.5">Setup</p><p className="text-[#94a3b8]">{pos.setup_type}</p></div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop table view */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#334155] text-[#94a3b8] text-xs uppercase tracking-wide">
@@ -63,37 +93,19 @@ export default function PositionsTable() {
             {positions.map((pos) => {
               const pnlPositive = pos.unrealized_pnl >= 0
               const pnlColor = pnlPositive ? 'text-green-400' : 'text-red-400'
-              const entryVsCurrent = pos.current_price - pos.entry_price
-              const pctColor = entryVsCurrent >= 0 ? 'text-green-400' : 'text-red-400'
-
+              const pctColor = (pos.current_price - pos.entry_price) >= 0 ? 'text-green-400' : 'text-red-400'
               return (
                 <tr key={pos.id} className="hover:bg-[#334155]/40 transition-colors">
-                  <td className="px-4 py-3 font-mono font-semibold text-[#f1f5f9]">
-                    {pos.symbol}
-                  </td>
+                  <td className="px-4 py-3 font-mono font-semibold text-[#f1f5f9]">{pos.symbol}</td>
                   <td className="px-4 py-3 text-right text-[#f1f5f9]">{pos.qty}</td>
-                  <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">
-                    ${fmt(pos.entry_price)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">
-                    ${fmt(pos.current_price)}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-mono font-semibold ${pnlColor}`}>
-                    {fmtUSD(pos.unrealized_pnl)}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-mono text-xs ${pctColor}`}>
-                    {fmtPct(pos.entry_price, pos.current_price)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-red-400">
-                    ${fmt(pos.stop_loss)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-green-400">
-                    ${fmt(pos.take_profit)}
-                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">${fmt(pos.entry_price)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-[#f1f5f9]">${fmt(pos.current_price)}</td>
+                  <td className={`px-4 py-3 text-right font-mono font-semibold ${pnlColor}`}>{fmtUSD(pos.unrealized_pnl)}</td>
+                  <td className={`px-4 py-3 text-right font-mono text-xs ${pctColor}`}>{fmtPct(pos.entry_price, pos.current_price)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-red-400">${fmt(pos.stop_loss)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-green-400">${fmt(pos.take_profit)}</td>
                   <td className="px-4 py-3 text-left">
-                    <span className="inline-block px-2 py-0.5 bg-[#334155] rounded text-xs text-[#94a3b8]">
-                      {pos.setup_type}
-                    </span>
+                    <span className="inline-block px-2 py-0.5 bg-[#334155] rounded text-xs text-[#94a3b8]">{pos.setup_type}</span>
                   </td>
                 </tr>
               )

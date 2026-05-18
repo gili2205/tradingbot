@@ -98,9 +98,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-bold text-[#f1f5f9]">Overview</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <ControlButtons />
           {userEmail && (
             <button
@@ -110,7 +110,7 @@ export default function DashboardPage() {
                   router.push('/login')
                 })
               }}
-              className="text-xs text-[#94a3b8] hover:text-[#f1f5f9] transition-colors"
+              className="text-xs text-[#94a3b8] hover:text-[#f1f5f9] transition-colors whitespace-nowrap"
             >
               Sign out
             </button>
