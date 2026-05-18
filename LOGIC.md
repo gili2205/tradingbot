@@ -126,7 +126,7 @@ These rules reject candidates **before Claude sees them** — no AI judgment inv
 | **Earnings blackout** | Skip if earnings within 2 calendar days | Binary gap risk |
 | **Cooling symbols** | Skip if win rate < 25% in last 10 trades | Negative expectancy |
 | **Sector bucket full** | Skip if sector already has an open position | Concentration risk |
-| **15-min alignment gate** | For momentum/breakout setups: EMA + VWAP + MACD must ALL be bullish | Avoids weak breakouts |
+| **15-min alignment gate** | For momentum/breakout setups: EMA + VWAP + MACD must all be bullish. Exception: stocks with signal_score ≥ 8.5 only need 2/3 — a near-perfect score shouldn't be blocked by one lagging indicator | Avoids weak breakouts |
 | **Setup suppression** | Skip setup type if it has negative expectancy today | Rule 19 enforcement |
 
 After pre-filters, **~20 finalists** reach Claude.
@@ -142,9 +142,12 @@ Before markets open, Claude runs a separate analysis:
 
 | Posture | Meaning |
 |---|---|
-| `normal` | Trade as usual |
-| `conservative` | Smaller sizes, higher confidence threshold |
-| `stand_aside` | No new entries (FOMC day, major data print, extreme conditions) |
+| `aggressive` | Strong tailwinds — standard thresholds, take setups freely |
+| `normal` | Neutral day — standard thresholds, trade on signal merit |
+| `conservative` | Headwinds (sector risk, weak market, macro uncertainty) — require signal_score ≥ 8.0 AND confidence ≥ 7. **Does not mean zero trades** — a score-9 stock with a clear R:R still gets a BUY. You are being selective, not paralysed. |
+| `stand_aside` | Major macro event (FOMC, NFP) — no new BUY entries until the unlock time |
+
+**Important**: `special_warnings` in the daily plan describe conditions at market open (9:35 AM) based on the morning watchlist. They do **not** retroactively veto afternoon candidates from different sectors.
 
 **Macro unlock rules** (loosen the posture as the day progresses):
 - FOMC day: `stand_aside` until 2:30 PM ET
@@ -178,6 +181,20 @@ Claude receives a complete package every scan cycle:
 
 **Recent history (last 20 trades):**
 - Symbol, outcome (win/loss), setup type, P&L, confidence score used
+
+### Market Posture (SPY Levels)
+
+Every scan cycle the bot measures SPY relative to the previous day's high/low and sets a `market_posture`:
+
+| Posture | Condition | Claude's behaviour |
+|---|---|---|
+| `above_pdh` | SPY > prev day high | Bullish tailwind — confidence +1, let winners run |
+| `near_pdh` | SPY within 0.5% of prev day high | Approaching resistance — tighten TPs, lean smaller size |
+| `mid_range` | SPY between yesterday's levels | Neutral — trade on individual signal |
+| `near_pdl` | SPY approaching prev day low | Support test — be more selective |
+| `below_pdl` | SPY < prev day low | Broad weakness — reduce confidence by 1, tighten TP, require score ≥ 8.0 to BUY. **Still trades high-quality setups — does not mean auto-SKIP.** |
+
+Posture is a **context multiplier**, not an override. A score-10 stock with 2× volume surge still gets a BUY in `below_pdl` — just with tighter targets.
 
 ### Claude's 20 Inviolable Rules
 
@@ -247,7 +264,7 @@ Even after Claude says BUY, the executor runs additional checks:
 
 **Fundamental gates:**
 - Daily drawdown limit hit? → Skip
-- Daily plan posture = `stand_aside`? → Skip
+- Daily plan posture = `stand_aside`? → Skip (conservative only raises the bar, does not skip)
 - Symbol on cooling list? → Skip
 - Setup type suppressed? → Skip
 - Earnings within 2 days? → Skip (double-checked at execution time)
@@ -259,7 +276,7 @@ Even after Claude says BUY, the executor runs additional checks:
 - No live quote available? → Skip
 - Fresh SEC 8-K filing in last 48 hours? → Skip (material undisclosed info)
 - After 3:45 PM ET? → Skip
-- After 10:15 AM + score < 9 or confidence < 8? → Skip (midday requires high conviction)
+- After 10:15 AM + score < 9 or confidence < 8? → Skip (midday requires high conviction — same as `MIDDAY_ENTRY_MIN_SCORE = 9.0`)
 - SPY trending down on last 3 bars AND not a gap-and-go? → Skip
 
 **Portfolio gates:**
@@ -357,4 +374,30 @@ Trading continues uninterrupted.
 | Max correlation | 0.80 | Factor concentration guard |
 | Max ATR/price | 5.0% | Volatility ceiling |
 | Max hold time | 90 minutes | Thesis decay prevention |
+
+---
+
+## Changelog
+
+### 2026-05-18 — Loosen over-aggressive filters (commit `ad28273`)
+
+**Problem**: The bot ran all day without a single trade despite multiple stocks scoring 10.0.
+Root cause was three stacked filters that together blocked every setup:
+
+**1. 15-min gate too strict**
+- **Before**: Momentum/gap setups required 3/3 15-min indicators (EMA + VWAP + MACD all bullish)
+- **After**: Stocks with signal_score ≥ 8.5 only need 2/3 — a near-perfect score shouldn't be blocked by one lagging indicator
+- **Why**: IGV, AAOI, SHOP, SMCI all scored 10.0 but were vetoed at this gate before Claude ever saw them
+
+**2. `below_pdl` posture too vague**
+- **Before**: Prompt said "only the strongest setups" — Claude interpreted this as skip everything
+- **After**: Explicit instruction: confidence −1, require score ≥ 8.0, tighter TP, but still BUY if R:R ≥ 2.0
+- **Why**: BIDU scored 10.0 with vol_ratio 1.6× and got `conf=6, SKIP, R:R=None` — Claude wasn't even calculating levels
+
+**3. `conservative` posture undefined**
+- **Before**: No explanation of what `conservative` means in the system prompt — Claude guessed "skip all"
+- **After**: Explicit guide added: conservative = score ≥ 8 AND confidence ≥ 7 required, not zero trades
+- **Why**: Morning study set conservative posture due to tech concentration at 9:35 AM. Claude carried that warning into every afternoon scan, SKIPping candidates from completely different sectors
+
+**Rollback**: `git reset --hard a4b16dd`
 | EOD close | 3:45 PM ET | No overnight positions |
