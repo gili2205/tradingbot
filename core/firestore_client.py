@@ -12,9 +12,9 @@ _initialized = False
 def get_db():
     """Return Firestore client, or None if credentials are missing/invalid."""
     global _db, _initialized
-    if not _initialized:
+    if not _initialized or _db is None:
         with _lock:
-            if not _initialized:
+            if not _initialized or _db is None:
                 _db = _init()
                 _initialized = True
     return _db

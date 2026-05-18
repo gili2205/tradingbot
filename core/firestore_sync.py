@@ -115,6 +115,7 @@ def sync_status(mode="live", deployed_today=0.0, daily_pnl=0.0,
     try:
         db = _db()
         if not db:
+            log.warning("sync_status: Firestore client unavailable — heartbeat skipped")
             return
         db.collection("status").document("bot").set({
             "running":              True,
