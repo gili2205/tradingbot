@@ -169,11 +169,11 @@ MARKET_CLOSE_HOUR       = 15
 MARKET_CLOSE_MIN        = 45   # last entry window closes at 3:45
 
 # Prime entry window — highest-quality momentum occurs in the first 45 min after open.
-# Outside this window, only very high conviction setups are allowed through.
+# Outside this window, high conviction setups are required (but not near-perfect).
 PRIME_ENTRY_END_HOUR    = 10
 PRIME_ENTRY_END_MIN     = 15
-MIDDAY_ENTRY_MIN_SCORE  = 9.0  # signal score required outside prime window
-MIDDAY_ENTRY_MIN_CONF   = 8    # Claude confidence required outside prime window
+MIDDAY_ENTRY_MIN_SCORE  = 7.5  # signal score required outside prime window (was 9.0 — too restrictive)
+MIDDAY_ENTRY_MIN_CONF   = 7    # Claude confidence required outside prime window (was 8)
 
 # Scheduler fires every SCAN_INTERVAL_MINUTES throughout the day.
 # During high-volume windows (9:35–11:00 and 2:30–3:45) every cycle runs a full scan.

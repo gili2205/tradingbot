@@ -276,7 +276,7 @@ Even after Claude says BUY, the executor runs additional checks:
 - No live quote available? → Skip
 - Fresh SEC 8-K filing in last 48 hours? → Skip (material undisclosed info)
 - After 3:45 PM ET? → Skip
-- After 10:15 AM + score < 9 or confidence < 8? → Skip (midday requires high conviction — same as `MIDDAY_ENTRY_MIN_SCORE = 9.0`)
+- After 10:15 AM + score < 7.5 or confidence < 7? → Skip (midday gate — was 9.0/8, lowered 2026-05-22)
 - SPY trending down on last 3 bars AND not a gap-and-go? → Skip
 
 **Portfolio gates:**
@@ -378,6 +378,22 @@ Trading continues uninterrupted.
 ---
 
 ## Changelog
+
+### 2026-05-22 — Lower midday gate thresholds (commit TBD)
+
+**Problem**: Bot went 4 days without a single trade. Stocks on the watchlist were up significantly.
+Root cause: the prime trading window was only **40 minutes** (9:35–10:15 AM). After that, the midday gate required score ≥ 9.0 AND confidence ≥ 8 — an almost impossible bar. On days where the morning study set conservative posture or SPY was below PDL, even that 40-minute window produced no trades.
+
+**Changes:**
+- `MIDDAY_ENTRY_MIN_SCORE`: 9.0 → 7.5 (still high conviction, but achievable)
+- `MIDDAY_ENTRY_MIN_CONF`: 8 → 7 (still requires strong confidence)
+- `session_overrides` midday floor: 6.5 → 5.5 (allows morning study to lower the score filter when conditions warrant)
+
+**Effect**: The bot can now find trades throughout the full trading day, not just a 40-minute window. Score 7.5 + confidence 7 represents a solid setup — not a lottery ticket.
+
+**Rollback**: `git reset --hard cac0e7a`
+
+---
 
 ### 2026-05-18 — Loosen over-aggressive filters (commit `ad28273`)
 

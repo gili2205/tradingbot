@@ -21,9 +21,9 @@ class SessionOverrides:
         self.config = config_module
 
         self._BOUNDS: dict[str, tuple[float, float]] = {
-            "signal_score_min_normal": (5.5,  7.5),
-            "signal_score_min_midday": (6.5,  8.5),
-            "vol_ratio_min_entry":     (0.8,  1.5),
+            "signal_score_min_normal": (5.5, 7.5),
+            "signal_score_min_midday": (5.5, 8.0),  # was (6.5, 8.5) — floor too high
+            "vol_ratio_min_entry":     (0.8, 1.5),
             "rsi_max_entry":           (62.0, 70.0),
         }
 
