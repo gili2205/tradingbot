@@ -16,6 +16,7 @@ interface ToastState {
   type: 'success' | 'error'
 }
 
+type TickerStatus = 'idle' | 'checking' | 'valid' | 'invalid' | 'duplicate'
 
 function NumberInput({
   label,
@@ -80,6 +81,11 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
+async function validateTicker(symbol: string): Promise<{ valid: boolean; name?: string; error?: string; warning?: string }> {
+  const res = await fetch(`/api/validate-ticker?symbol=${encodeURIComponent(symbol)}`)
+  return res.json()
+}
+
 export default function ConfigPage() {
   const router = useRouter()
   const [form, setForm] = useState<BotConfig>(DEFAULT_CONFIG)
@@ -87,6 +93,9 @@ export default function ConfigPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [newSymbol, setNewSymbol] = useState('')
+  const [tickerStatus, setTickerStatus] = useState<TickerStatus>('idle')
+  const [tickerError, setTickerError] = useState('')
+  const [tickerName, setTickerName] = useState('')
 
   const [authReady, setAuthReady] = useState(false)
 
@@ -106,6 +115,13 @@ export default function ConfigPage() {
     })
     return unsub
   }, [authReady])
+
+  // Reset ticker validation state when input changes
+  useEffect(() => {
+    setTickerStatus('idle')
+    setTickerError('')
+    setTickerName('')
+  }, [newSymbol])
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type })
@@ -134,15 +150,39 @@ export default function ConfigPage() {
     }
   }
 
-  function addSymbol() {
+  async function handleAddSymbol() {
     const sym = newSymbol.trim().toUpperCase()
     if (!sym) return
+
     if (form.watchlist.includes(sym)) {
-      setNewSymbol('')
+      setTickerStatus('duplicate')
+      setTickerError(`${sym} is already in the watchlist`)
       return
     }
-    set('watchlist', [...form.watchlist, sym])
-    setNewSymbol('')
+
+    setTickerStatus('checking')
+    setTickerError('')
+    setTickerName('')
+
+    try {
+      const result = await validateTicker(sym)
+      if (result.valid) {
+        setTickerStatus('valid')
+        setTickerName(result.name ?? sym)
+        set('watchlist', [...form.watchlist, sym])
+        setNewSymbol('')
+        // Reset status after brief success flash
+        setTimeout(() => setTickerStatus('idle'), 1500)
+      } else {
+        setTickerStatus('invalid')
+        setTickerError(result.error ?? `${sym} is not a valid tradeable symbol`)
+      }
+    } catch {
+      // Network error — add the ticker anyway, don't block the user
+      set('watchlist', [...form.watchlist, sym])
+      setNewSymbol('')
+      setTickerStatus('idle')
+    }
   }
 
   function removeSymbol(sym: string) {
@@ -156,6 +196,13 @@ export default function ConfigPage() {
       </div>
     )
   }
+
+  const inputBorderClass =
+    tickerStatus === 'invalid' || tickerStatus === 'duplicate'
+      ? 'border-red-500 focus:border-red-400'
+      : tickerStatus === 'valid'
+      ? 'border-green-500 focus:border-green-400'
+      : 'border-[#334155] focus:border-[#3b82f6]'
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
@@ -264,6 +311,7 @@ export default function ConfigPage() {
 
       <SectionCard title={`Watchlist (${form.watchlist.length} symbols)`}>
         <div className="space-y-4">
+          {/* Ticker chips */}
           <div className="flex flex-wrap gap-2">
             {form.watchlist.map((sym) => (
               <span
@@ -285,22 +333,53 @@ export default function ConfigPage() {
               <span className="text-[#94a3b8] text-sm">No symbols in watchlist</span>
             )}
           </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newSymbol}
-              onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && addSymbol()}
-              placeholder="Add symbol (e.g. AAPL)"
-              className="flex-1 bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-[#f1f5f9] text-sm font-mono focus:outline-none focus:border-[#3b82f6] transition-colors placeholder-[#475569]"
-            />
-            <button
-              type="button"
-              onClick={addSymbol}
-              className="px-4 py-2 bg-[#334155] hover:bg-[#475569] text-[#f1f5f9] text-sm font-medium rounded-lg transition-colors"
-            >
-              Add
-            </button>
+
+          {/* Add input */}
+          <div className="space-y-1.5">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={newSymbol}
+                  onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddSymbol()}
+                  placeholder="Add symbol (e.g. AAPL)"
+                  maxLength={10}
+                  className={`w-full bg-[#0f172a] border rounded-lg px-3 py-2 text-[#f1f5f9] text-sm font-mono focus:outline-none transition-colors placeholder-[#475569] ${inputBorderClass} ${
+                    tickerStatus === 'checking' ? 'pr-10' : ''
+                  }`}
+                />
+                {/* Spinner while checking */}
+                {tickerStatus === 'checking' && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <svg className="animate-spin h-4 w-4 text-[#94a3b8]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  </span>
+                )}
+                {/* Valid checkmark */}
+                {tickerStatus === 'valid' && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-400 text-base">✓</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleAddSymbol}
+                disabled={tickerStatus === 'checking' || !newSymbol.trim()}
+                className="px-4 py-2 bg-[#334155] hover:bg-[#475569] text-[#f1f5f9] text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {tickerStatus === 'checking' ? 'Checking…' : 'Add'}
+              </button>
+            </div>
+
+            {/* Error message */}
+            {(tickerStatus === 'invalid' || tickerStatus === 'duplicate') && tickerError && (
+              <p className="text-red-400 text-xs flex items-center gap-1">
+                <span>✗</span>
+                <span>{tickerError}</span>
+              </p>
+            )}
           </div>
         </div>
       </SectionCard>
