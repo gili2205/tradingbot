@@ -27,10 +27,13 @@ export default function ControlButtons() {
 
   async function handleDryRunToggle() {
     if (!config) return
-    const action = config.dry_run ? 'disable dry-run (go LIVE)' : 'enable dry-run'
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action}?\n\n${!config.dry_run ? 'This will switch the bot to paper trading mode.' : 'WARNING: This will switch the bot to LIVE trading with real money.'}`
-    )
+    const confirmed = config.dry_run
+      ? window.confirm(
+          'Enable active trading?\n\nThe bot will start placing real orders on your Alpaca account. ' +
+          'Since you configured the paper-trading endpoint, no real money is at risk — ' +
+          'but orders will actually be submitted to Alpaca.'
+        )
+      : window.confirm('Switch bot to dry-run (simulation) mode?\n\nNo orders will be placed until you re-enable trading.')
     if (!confirmed) return
 
     setLoadingDryRun(true)
