@@ -21,24 +21,23 @@ function getStatusLabel(status: BotStatus | null): string {
   if (!status) return 'Offline'
   if (isOffline(status.last_heartbeat)) return 'Offline'
   if (status.mode === 'paused') return 'Paused'
-  if (status.mode === 'paper') return 'Paper Trading'
   if (status.mode === 'real') return 'Real Trading'
-  return 'Unknown'
+  return 'Paper Trading'  // 'paper', 'live', or any legacy value
 }
 
 function getStatusColor(status: BotStatus | null): string {
   if (!status || isOffline(status.last_heartbeat)) return 'bg-gray-500 text-gray-100'
   if (status.mode === 'paused') return 'bg-red-500 text-white'
-  if (status.mode === 'paper') return 'bg-blue-500 text-white'
   if (status.mode === 'real') return 'bg-green-500 text-white'
+  return 'bg-blue-500 text-white'  // paper, live, or any legacy value
   return 'bg-gray-500 text-gray-100'
 }
 
 function getDotColor(status: BotStatus | null): string {
   if (!status || isOffline(status.last_heartbeat)) return 'bg-gray-400'
   if (status.mode === 'paused') return 'bg-red-400'
-  if (status.mode === 'paper') return 'bg-blue-400'
   if (status.mode === 'real') return 'bg-green-400'
+  return 'bg-blue-400'  // paper, live, or any legacy value
   return 'bg-gray-400'
 }
 
@@ -88,7 +87,7 @@ export default function BotStatusBar() {
             <span className="text-[#94a3b8] text-sm">
               Mode:{' '}
               <span className="text-[#f1f5f9] font-medium">
-                {status.mode === 'paper' ? 'Paper Trading' : status.mode === 'real' ? 'Real Trading' : 'Paused'}
+                {status.mode === 'paper' ? 'Paper Trading' : status.mode === 'real' ? 'Real Trading' : status.mode === 'paused' ? 'Paused' : 'Paper Trading'}
               </span>
             </span>
           )}
