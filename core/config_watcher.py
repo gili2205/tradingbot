@@ -84,9 +84,6 @@ class ConfigWatcher:
     def is_paused(self) -> bool:
         return bool(self.get("paused", False))
 
-    def is_dry_run(self) -> bool:
-        return bool(self.get("dry_run", False))
-
     def watchlist_override(self) -> list[str] | None:
         """Returns override watchlist from UI, or None to use config.py default."""
         v = self.get("watchlist")

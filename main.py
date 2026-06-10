@@ -36,21 +36,16 @@ def graceful_exit(sig, frame):
 def main():
     """Parse CLI flags, start the scheduler, and block until interrupt.
 
-    Recognizes optional flags --dry-run and --force from sys.argv.
+    Recognizes optional flag --force from sys.argv.
 
     Returns:
         None under normal loop exit; may call sys.exit from the signal handler.
     """
     parser = argparse.ArgumentParser(description="Autonomous stock trading bot")
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Log AI decisions without placing orders",
-    )
-    parser.add_argument(
         "--force",
         action="store_true",
-        help="Bypass market-hours gates so the pipeline runs at any time (use with --dry-run)",
+        help="Bypass market-hours gates so the pipeline runs at any time",
     )
     args = parser.parse_args()
 
@@ -58,11 +53,7 @@ def main():
     signal.signal(signal.SIGTERM, graceful_exit)
 
     log.info("=" * 60)
-    suffix = ""
-    if args.dry_run:
-        suffix += "  [DRY-RUN]"
-    if args.force:
-        suffix += "  [FORCE]"
+    suffix = "  [FORCE]" if args.force else ""
     log.info("Autonomous Stock Trading Bot — starting up%s", suffix)
     log.info(
         "Account target: $%.0f | Max daily deploy: $%.0f",
@@ -76,7 +67,7 @@ def main():
     )
     log.info("=" * 60)
 
-    orchestrator, backtester = build_trading_stack(dry_run=args.dry_run)
+    orchestrator, backtester = build_trading_stack()
     if args.force:
         orchestrator.set_force_run(True)
 
@@ -130,7 +121,7 @@ def main():
             pos_count = len(positions)
         except Exception:
             pos_count = orchestrator._open_positions_count if hasattr(orchestrator, '_open_positions_count') else 0
-        mode = "dry_run" if orchestrator._dry_run else "live"
+        mode = "paper"
         sync_status(
             mode=mode,
             deployed_today=orchestrator._deployed_today,

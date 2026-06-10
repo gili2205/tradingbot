@@ -26,14 +26,10 @@ from trading.session_overrides import SessionOverrides
 from utils.backtester import Backtester
 
 
-def build_trading_stack(dry_run: bool = False) -> tuple[TradingOrchestrator, Backtester]:
+def build_trading_stack() -> tuple[TradingOrchestrator, Backtester]:
     """Construct broker, data clients, risk engines, orchestrator, and weekly backtester.
 
-    Starts the optional real-time news stream and attaches it to the broker. Calls
-    reset_daily_state on the orchestrator and enables dry-run mode when requested.
-
-    Args:
-        dry_run: When True, the orchestrator logs decisions but does not place orders.
+    Starts the optional real-time news stream and attaches it to the broker.
 
     Returns:
         A tuple of the configured TradingOrchestrator and Backtester instances.
@@ -96,8 +92,6 @@ def build_trading_stack(dry_run: bool = False) -> tuple[TradingOrchestrator, Bac
     broker._news_stream = news_stream
 
     orchestrator.reset_daily_state()
-    if dry_run:
-        orchestrator.set_dry_run(True)
 
     try:
         from core.firestore_sync import init_default_config

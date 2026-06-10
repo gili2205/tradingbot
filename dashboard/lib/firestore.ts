@@ -16,7 +16,6 @@ import { db } from './firebase'
 
 export interface BotConfig {
   paused: boolean
-  dry_run: boolean
   max_risk_per_trade: number
   max_concurrent_positions: number
   max_daily_capital: number
@@ -33,7 +32,7 @@ export interface BotStatus {
   running: boolean
   last_heartbeat: Timestamp | null
   pid: number
-  mode: 'live' | 'dry_run' | 'paused'
+  mode: 'paper' | 'real' | 'paused'
   deployed_today: number
   daily_pnl: number
   trades_today: number
@@ -86,7 +85,6 @@ export interface DailySummary {
 
 export const DEFAULT_CONFIG: BotConfig = {
   paused: false,
-  dry_run: true,
   max_risk_per_trade: 100.0,
   max_concurrent_positions: 4,
   max_daily_capital: 4000.0,
@@ -164,9 +162,5 @@ export async function saveBotConfig(config: BotConfig): Promise<void> {
 
 export async function togglePaused(currentPaused: boolean): Promise<void> {
   await updateBotConfig({ paused: !currentPaused })
-}
-
-export async function toggleDryRun(currentDryRun: boolean): Promise<void> {
-  await updateBotConfig({ dry_run: !currentDryRun })
 }
 

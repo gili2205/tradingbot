@@ -21,24 +21,24 @@ function getStatusLabel(status: BotStatus | null): string {
   if (!status) return 'Offline'
   if (isOffline(status.last_heartbeat)) return 'Offline'
   if (status.mode === 'paused') return 'Paused'
-  if (status.mode === 'dry_run') return 'Dry Run'
-  if (status.mode === 'live') return 'Live'
+  if (status.mode === 'paper') return 'Paper Trading'
+  if (status.mode === 'real') return 'Real Trading'
   return 'Unknown'
 }
 
 function getStatusColor(status: BotStatus | null): string {
   if (!status || isOffline(status.last_heartbeat)) return 'bg-gray-500 text-gray-100'
   if (status.mode === 'paused') return 'bg-red-500 text-white'
-  if (status.mode === 'dry_run') return 'bg-yellow-500 text-gray-900'
-  if (status.mode === 'live') return 'bg-green-500 text-white'
+  if (status.mode === 'paper') return 'bg-blue-500 text-white'
+  if (status.mode === 'real') return 'bg-green-500 text-white'
   return 'bg-gray-500 text-gray-100'
 }
 
 function getDotColor(status: BotStatus | null): string {
   if (!status || isOffline(status.last_heartbeat)) return 'bg-gray-400'
   if (status.mode === 'paused') return 'bg-red-400'
-  if (status.mode === 'dry_run') return 'bg-yellow-400'
-  if (status.mode === 'live') return 'bg-green-400'
+  if (status.mode === 'paper') return 'bg-blue-400'
+  if (status.mode === 'real') return 'bg-green-400'
   return 'bg-gray-400'
 }
 
@@ -67,7 +67,7 @@ export default function BotStatusBar() {
         <span
           className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${pillColor}`}
         >
-          <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'live' ? 'animate-pulse' : ''}`} />
+          <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'paper' ? 'animate-pulse' : ''}`} />
           {label}
         </span>
         <span className={`text-xs font-medium font-mono ${offline ? 'text-red-400' : 'text-[#94a3b8]'}`}>
@@ -81,14 +81,14 @@ export default function BotStatusBar() {
           <span
             className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${pillColor}`}
           >
-            <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'live' ? 'animate-pulse' : ''}`} />
+            <span className={`w-2 h-2 rounded-full ${dotColor} ${!offline && status?.mode === 'paper' ? 'animate-pulse' : ''}`} />
             {label}
           </span>
           {status?.mode && (
             <span className="text-[#94a3b8] text-sm">
               Mode:{' '}
-              <span className="text-[#f1f5f9] font-medium capitalize">
-                {status.mode.replace('_', ' ')}
+              <span className="text-[#f1f5f9] font-medium">
+                {status.mode === 'paper' ? 'Paper Trading' : status.mode === 'real' ? 'Real Trading' : 'Paused'}
               </span>
             </span>
           )}

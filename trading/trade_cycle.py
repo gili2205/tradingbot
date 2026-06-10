@@ -261,13 +261,6 @@ class TradeCycleMixin:
             if watcher.is_paused():
                 log.info("Bot is PAUSED via dashboard — skipping scan cycle")
                 return
-            if watcher.is_dry_run() and not self._dry_run:
-                log.info("Dry-run enabled via dashboard — switching to dry-run mode")
-                self._dry_run = True
-            elif not watcher.is_dry_run() and self._dry_run:
-                log.info("Dry-run disabled via dashboard — resuming live paper trading")
-                self._dry_run = False
-
             # Apply Firestore overrides to config module so all downstream code
             # (risk manager, executor, screener) picks up the live dashboard values.
             _OVERRIDES = [
