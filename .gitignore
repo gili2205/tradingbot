@@ -56,3 +56,4 @@ htmlcov/
 dashboard/node_modules/
 dashboard/.next/
 dashboard/out/
+.vercel

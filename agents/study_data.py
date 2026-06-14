@@ -89,8 +89,20 @@ class StudyDataMixin:
                 kw in e["title"].lower() for e in high_impact for kw in CRITICAL_KEYWORDS
             )
 
+            # ForexFactory lists one release as several line items (e.g. CPI is
+            # "CPI m/m", "CPI y/y", "Core CPI m/m", "Core CPI y/y" = 4 entries for a
+            # single event). Count DISTINCT releases, not line items, so a normal CPI
+            # or jobs day doesn't auto-trigger stand_aside.
+            def _release_key(title: str) -> str:
+                t = title.lower()
+                for suffix in (" m/m", " y/y", " q/q", " mom", " yoy", " qoq"):
+                    t = t.replace(suffix, "")
+                return t.replace("core ", "").strip()
+
+            distinct_high = {_release_key(e["title"]) for e in high_impact}
+
             macro_flag = "stand_aside" if is_fomc else ("caution" if has_critical else "none")
-            if len(high_impact) >= 3:
+            if len(distinct_high) >= 3:
                 macro_flag = "stand_aside"
 
             log.info(

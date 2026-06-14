@@ -1,6 +1,8 @@
 """Entry point: builds the trading stack, runs APScheduler jobs for live trading."""
 
 import argparse
+import logging
+import os
 import signal
 import sys
 import time
@@ -12,6 +14,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import config
 from bootstrap import build_trading_stack
 from core.database import log
+
+# Watchdog: force a systemd restart if no scan completes for this many minutes
+# during regular trading hours. Scans run every 10 min; a single hang + recovery
+# is ~10 min, so 25 min ≈ two consecutive missed scans = genuinely wedged.
+WATCHDOG_STALL_MINUTES = 25
 
 
 def graceful_exit(sig, frame):
@@ -71,7 +78,9 @@ def main():
     if args.force:
         orchestrator.set_force_run(True)
 
-    executors = {"default": ThreadPoolExecutor(max_workers=2)}
+    # 4 workers so a single slow/stuck job (e.g. a 13-min morning study or a hung
+    # scan) cannot starve position management, heartbeats, and scanning of threads.
+    executors = {"default": ThreadPoolExecutor(max_workers=4)}
     scheduler = BackgroundScheduler(executors=executors, timezone=config.ET)
 
     scheduler.add_job(
@@ -143,11 +152,37 @@ def main():
     log.info("Scheduler started — position management every 2 min, scan every 10 min")
     scheduler.start()
 
+    def _scan_pipeline_stalled() -> bool:
+        """Return True when scans should be running but the pipeline is wedged.
+
+        Runs in the main thread, independent of the scheduler's worker pool, so a
+        hung scan thread (e.g. a network call with no socket timeout) cannot hide
+        the stall. Conservative to avoid false-positive restarts: only fires during
+        regular trading hours, after the study window, once the study is complete.
+        """
+        from datetime import datetime as _dt, timedelta as _td
+        now_et = _dt.now(config.ET)
+        if now_et.weekday() >= 5:
+            return False
+        # Window: after the first post-study scan should have landed, before close.
+        if not (_dt.combine(now_et.date(), _dt.min.time().replace(hour=9, minute=50))
+                <= now_et.replace(tzinfo=None)
+                <= _dt.combine(now_et.date(), _dt.min.time().replace(hour=15, minute=55))):
+            return False
+        if not getattr(orchestrator, "_study_complete", False):
+            return False
+        last = orchestrator._last_scan_complete_ts
+        if last is None:
+            return True  # study done, in-window, yet no scan ever completed
+        return (now_et - last) > _td(minutes=WATCHDOG_STALL_MINUTES)
+
     _force_scan_tick = 0
+    _watchdog_tick   = 0
     try:
         while True:
             time.sleep(1)
             _force_scan_tick += 1
+            _watchdog_tick   += 1
             if _force_scan_tick >= 5:
                 _force_scan_tick = 0
                 try:
@@ -160,6 +195,21 @@ def main():
                             trigger="date",
                             run_date=_dt.now(config.ET),
                         )
+                except Exception:
+                    pass
+            if _watchdog_tick >= 60:
+                _watchdog_tick = 0
+                try:
+                    if _scan_pipeline_stalled():
+                        last = orchestrator._last_scan_complete_ts
+                        log.critical(
+                            "WATCHDOG: scan pipeline stalled (last completed scan: %s) — "
+                            "forcing process exit so systemd restarts the bot.",
+                            last.isoformat() if last else "never",
+                        )
+                        scheduler.shutdown(wait=False)
+                        logging.shutdown()
+                        os._exit(1)
                 except Exception:
                     pass
     except (KeyboardInterrupt, SystemExit):

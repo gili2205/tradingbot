@@ -106,6 +106,11 @@ class TradingOrchestrator(ScannerMixin, PositionsMixin, ExecutorMixin, TradeCycl
         self._scan_lock       = threading.Lock()
         self._scan_generation = 0  # incremented when a scan thread is abandoned
 
+        # Liveness signal for the main-thread watchdog: updated every time a scan
+        # body completes (whether it traded, skipped, or returned early). A stale
+        # value during market hours means the scan pipeline is wedged.
+        self._last_scan_complete_ts: datetime | None = None
+
         self._ET = config.ET
         self._SCAN_TIMEOUT_SECONDS = 480
 
@@ -302,9 +307,13 @@ class TradingOrchestrator(ScannerMixin, PositionsMixin, ExecutorMixin, TradeCycl
                     self._scan_generation += 1  # invalidate the abandoned thread
                     log.error(
                         "Scan thread still alive after grace period — releasing lock. "
-                        "Abandoned thread (gen %d) will not execute decisions.",
+                        "Abandoned thread (gen %d) will not execute decisions. "
+                        "Watchdog will force-restart if scans stay stalled.",
                         my_gen,
                     )
+            else:
+                # Thread finished cleanly — the scan pipeline is alive.
+                self._last_scan_complete_ts = datetime.now(self._ET)
         finally:
             self._scan_lock.release()
 
