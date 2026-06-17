@@ -250,7 +250,7 @@ class ExecutorMixin:
             return None
 
         if _cur_min > _prime_end:
-            _conf = int(d.get("confidence", 0))
+            _conf = int(float(d.get("signal_confidence") or d.get("confidence") or 0))
             if _ss < config.MIDDAY_ENTRY_MIN_SCORE or _conf < config.MIDDAY_ENTRY_MIN_CONF:
                 self.database.record_decision(symbol, "SKIP", price,
                                 reasoning=(f"Midday gate: score {_ss:.1f}<{config.MIDDAY_ENTRY_MIN_SCORE} "
