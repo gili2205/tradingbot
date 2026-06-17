@@ -87,21 +87,27 @@ class IndicatorEngine(PatternsMixin):
         _elapsed     = max(1, min(_et_last.hour * 60 + _et_last.minute - 570, 390))
         _avg_dvol    = float(df["vol_sma20"].iloc[-1]) * 78
         _expected    = _avg_dvol * (_elapsed / 390.0)
-        if _today_vol == 0 and _today_bars > 0:
+        if _today_bars == 0:
+            # The fetched window contains NO bars timestamped today (IEX/historical
+            # feed lag — common when get_bars is re-fetched intraday). We cannot
+            # measure today's pace, so return neutral. Previously this fell through
+            # to `min(_today_vol / _expected) = min(0/expected) = 0.0`, which then
+            # tripped the vol_ratio floor and silently vetoed every high-conviction
+            # BUY (root cause of zero trades).
+            log.warning("vol_ratio: 0 today-bars in fetched window — using neutral 1.0")
+            _vol_ratio = 1.0
+        elif _today_vol == 0:
             # Today's bars exist but all report zero volume — IEX data gap.
-            # Fall back to neutral rather than falsely vetoing the symbol.
             log.warning("vol_ratio IEX gap: %d today-bars all zero volume "
                         "(avg_dvol=%.0f expected=%.0f elapsed=%dm) — using 1.0",
                         _today_bars, _avg_dvol, _expected, _elapsed)
             _vol_ratio = 1.0
         elif _expected > 0:
             _vol_ratio = min(_today_vol / _expected, 10.0)
-        elif _today_bars > 0:
-            # No historical volume average (all bars zero) but today has bars — data gap.
+        else:
+            # Today has real volume but no historical average — data gap, stay neutral.
             log.warning("vol_ratio IEX gap: avg_dvol=0 with %d today-bars — using 1.0", _today_bars)
             _vol_ratio = 1.0
-        else:
-            _vol_ratio = 0.0
         df["vol_ratio"] = _vol_ratio
 
         # ── VWAP (intraday reset — cumulates per calendar day, not across days) ───
