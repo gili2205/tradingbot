@@ -261,8 +261,12 @@ MAX_CONSECUTIVE_LOSSES_STANDASIDE = 3  # after 3 losses: stand aside
 MAX_PORTFOLIO_HEAT_PCT = 0.02     # 2% of equity — same as daily drawdown limit
 
 # Circuit breaker
-CIRCUIT_BREAKER_SPY_DROP_PCT   = -1.5   # SPY down ≥ 1.5% from today's open → stand aside
-CIRCUIT_BREAKER_UVXY_SURGE_PCT =  5.0   # UVXY up ≥ 5% intraday → stand aside
+CIRCUIT_BREAKER_SPY_DROP_PCT   = -1.5   # SPY down ≥ 1.5% from today's open → stand aside (latches all day)
+# UVXY is a ~2x leveraged short-term VIX-futures ETF — it routinely swings ±5% on
+# normal days, so +5% was tripping the breaker (and latching the whole session) on
+# perfectly tradeable days. Only a genuine volatility spike (+12%) should gate, and the
+# UVXY gate no longer latches — it reflects CURRENT volatility (see market_guard.py).
+CIRCUIT_BREAKER_UVXY_SURGE_PCT = 12.0   # UVXY up ≥ 12% intraday → pause while elevated (non-latching)
 
 # Earnings blackout
 EARNINGS_BLACKOUT_DAYS = 2        # skip stocks reporting within 2 calendar days

@@ -122,14 +122,16 @@ class MarketGuard(EarningsMixin):
                 if uvxy_open > 0:
                     uvxy_chg = (uvxy_now - uvxy_open) / uvxy_open * 100
                     if uvxy_chg >= config.CIRCUIT_BREAKER_UVXY_SURGE_PCT:
-                        self._circuit_broken = True
-                        self._circuit_reason = (
+                        # NON-LATCHING: UVXY reflects *current* volatility. A spike that
+                        # fades should not keep the bot out all day, so we don't set
+                        # _circuit_broken — only block while UVXY is currently elevated.
+                        reason = (
                             f"CIRCUIT BREAKER: UVXY +{uvxy_chg:.1f}% intraday "
                             f"(threshold +{config.CIRCUIT_BREAKER_UVXY_SURGE_PCT:.0f}%). "
-                            f"Volatility spike — no new entries for the rest of the day."
+                            f"Volatility currently elevated — pausing new entries until it settles."
                         )
-                        log.warning(self._circuit_reason)
-                        return False, self._circuit_reason
+                        log.warning(reason)
+                        return False, reason
         except Exception as e:
             log.warning("Circuit breaker UVXY check failed: %s", e)
 

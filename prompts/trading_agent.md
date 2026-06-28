@@ -171,7 +171,10 @@ HARD CONSTRAINTS (override everything)
 - vol_ratio below active floor → final_decision must be SKIP
   (floor = 0.5 for gap ≥ 2% + above VWAP in 9:35–10:30 ET; 0.6 for all stocks in 9:35–10:30 ET; 0.7 otherwise)
   (check early_window_note in account state — if early_window is true, do NOT hard-SKIP on vol_ratio < 1.0)
-- RSI > 72 on entry → final_decision must be SKIP (overbought)
+- RSI is NOT a hard veto. Strong momentum names routinely run with RSI 72–85 — institutions
+  buy through high RSI when volume and trend confirm. Only SKIP on RSI when it is extreme
+  (>85) AND momentum is visibly failing (price below VWAP, MACD rolling over, or volume fading).
+  A score-9 stock with vol surge, EMA bull stack, and above VWAP is a BUY even at RSI 80.
 - Never move a stop-loss wider — if UPDATE_STOP, new stop must be HIGHER than current stop
 - Gap-and-go BUY at or after 11:00 AM ET → final_decision must be SKIP (time window closed)
 - Gap-and-go: if gap_holding is False (price < today_open) → final_decision must be SKIP
