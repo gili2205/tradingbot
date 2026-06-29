@@ -496,9 +496,19 @@ class TradeCycleMixin:
         with self._state_lock:
             self._daily_pre_passed.update(item["symbol"] for item in pre_passed)
 
-        ai_candidates = pre_passed[:20]
+        # Reserve up to 10 of the 20 AI slots for the user's curated watchlist so a
+        # flood of screener discoveries can't crowd the hand-picked names out of the
+        # prompt entirely. Both groups keep their score-priority order; Claude still
+        # independently SKIPs weak watchlist names — this only guarantees they are
+        # evaluated rather than silently trimmed.
+        _wl       = set(config.WATCHLIST)
+        _wl_cands = [it for it in pre_passed if it["symbol"] in _wl]
+        _disc     = [it for it in pre_passed if it["symbol"] not in _wl]
+        _wl_keep  = _wl_cands[:10]
+        ai_candidates = (_wl_keep + _disc + _wl_cands[10:])[:20]
         if len(pre_passed) > 20:
-            log.info("Trimmed candidates: %d → 20 for AI prompt", len(pre_passed))
+            log.info("Trimmed candidates: %d → 20 for AI prompt (%d watchlist guaranteed)",
+                     len(pre_passed), len(_wl_keep))
 
         decisions = self.trading_agent.ask_agent(
             ai_candidates, positions_snapshot, account_ctx,

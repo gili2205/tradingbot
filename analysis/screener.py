@@ -23,6 +23,31 @@ from core.database import log
 
 _DATA_BASE = "https://data.alpaca.markets"
 
+# ETFs / inverse / leveraged / volatility products have no place in a long-only
+# momentum STOCK screener — they can never be a valid momentum-long (inverse ones
+# literally rise when the market falls) and they were eating discovery slots and
+# crowding real stocks out of the top-20 sent to the AI (e.g. SPDN, IWM, IYR, IJR).
+# Discovery skips these; an explicit user watchlist entry is still honoured.
+_ETF_BLOCKLIST: frozenset[str] = frozenset({
+    # Broad index / total-market
+    "SPY", "QQQ", "DIA", "IWM", "VOO", "VTI", "IVV", "IJR", "IJH", "MDY", "RSP",
+    "VEA", "VWO", "EEM", "EFA", "IEFA", "IEMG", "ACWI", "SCHB", "SCHX",
+    # Sector SPDRs / industry
+    "XLF", "XLE", "XLK", "XLV", "XLY", "XLI", "XLP", "XLU", "XLB", "XLC", "XLRE",
+    "SMH", "SOXX", "XBI", "IBB", "XOP", "XME", "XRT", "KRE", "ITB", "IYR", "VNQ",
+    "KWEB", "JETS", "TAN", "ICLN", "ARKK", "ARKG", "ARKW", "IGV", "HACK", "FDN",
+    # Leveraged
+    "TQQQ", "UPRO", "SPXL", "SOXL", "TNA", "UDOW", "FNGU", "TECL", "LABU", "NUGT",
+    "BULZ", "USD", "WEBL", "DPST", "YINN",
+    # Inverse / volatility
+    "SQQQ", "SPXU", "SPXS", "SDOW", "SOXS", "TZA", "SH", "PSQ", "DOG", "RWM",
+    "SPDN", "SDS", "QID", "DXD", "LABD", "FAZ", "SARK", "NVDQ", "NVD",
+    "UVXY", "VIXY", "VXX", "SVXY", "UVIX", "SVIX",
+    # Commodity / bond / FX
+    "GLD", "SLV", "GDX", "GDXJ", "USO", "UNG", "TLT", "IEF", "HYG", "LQD",
+    "TMF", "TMV", "BIL", "SHV", "AGG", "BND", "UUP",
+})
+
 
 class Screener:
     """
@@ -295,6 +320,8 @@ class Screener:
                 sym = sym.strip().upper()
                 if sym in watchlist_set:
                     continue          # watchlist already guaranteed — don't waste a slot
+                if sym in _ETF_BLOCKLIST:
+                    continue          # ETFs/inverse/leveraged — never a momentum-long candidate
                 if add(sym):
                     added += 1
             log.info("Screener %s: %d new discovery slots filled", label, added)
